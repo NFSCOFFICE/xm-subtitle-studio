@@ -1,0 +1,387 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>XM Subtitle Studio</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <div class="grid-glow"></div>
+      <main class="shell">
+        <header class="topbar">
+          <div class="brand">
+            <span class="brand-mark"></span>
+            <h1>XM Subtitle Studio</h1>
+          </div>
+          <div class="topbar-controls">
+            <div class="topbar-meta">
+              <span class="meta-chip" data-i18n="meta_model">Whisper large-v3</span>
+              <span class="meta-chip" data-i18n="meta_offline">本地离线</span>
+              <span class="meta-chip" data-i18n="meta_outputs">字幕 + 文稿</span>
+            </div>
+            <div class="toolbar-switches">
+              <label class="toolbar-control">
+                <span data-i18n="ui_language">语言</span>
+                <select id="ui-locale" class="toolbar-select"></select>
+              </label>
+            </div>
+          </div>
+        </header>
+
+        <section class="workspace-grid">
+          <form id="upload-form" class="intake-panel">
+            <div class="panel-head">
+              <div>
+                <p class="panel-label" data-i18n="panel_input_label">新建任务</p>
+                <h3 data-i18n="panel_input_title">新建转写任务</h3>
+                <p class="panel-subline" data-i18n="panel_input_subline">先导入媒体，再选择识别策略，最后直接提交处理。</p>
+              </div>
+              <div class="panel-badge" data-i18n="panel_badge_local">本地推理</div>
+            </div>
+
+            <div class="workflow-stack">
+              <section class="stage-panel stage-panel-import">
+                <div class="stage-head">
+                  <div class="stage-index">01</div>
+                  <div class="stage-copy">
+                    <p class="stage-kicker" data-i18n="stage_import_kicker">导入媒体</p>
+                    <h4 data-i18n="stage_import_title">导入媒体</h4>
+                    <p class="stage-note" data-i18n="stage_import_note">音频与视频共用一个入口，直接进入转写流水线。</p>
+                  </div>
+                </div>
+
+                <label id="dropzone" class="dropzone">
+                  <input id="file-input" type="file" accept=".mp3,.wav,.m4a,.aac,.flac,.ogg,.mp4,.mov,.mkv,.webm,.m4v,.avi" multiple hidden />
+                  <div class="drop-stage">
+                    <div class="signal-cluster" aria-hidden="true">
+                      <span></span>
+                      <span></span>
+                      <span></span>
+                      <span></span>
+                      <span></span>
+                      <span></span>
+                    </div>
+                    <div class="drop-copy">
+                      <p class="drop-title" data-i18n="drop_title">拖拽音频或视频到这里</p>
+                      <p class="drop-subtitle" data-i18n="drop_subtitle">支持 MP3 / WAV / M4A / AAC / FLAC / OGG / MP4 / MOV / MKV / WEBM / AVI。</p>
+                    </div>
+                  </div>
+                  <p id="file-name" class="file-name" data-i18n="file_empty">尚未选择文件</p>
+                </label>
+
+                <div class="stage-tags">
+                  <span class="stage-tag" data-i18n="tag_batch">批量导入</span>
+                  <span class="stage-tag" data-i18n="tag_extract">视频抽轨</span>
+                  <span class="stage-tag" data-i18n="tag_offline">本地离线</span>
+                </div>
+              </section>
+
+              <section class="stage-panel stage-panel-setup">
+                <div class="stage-head">
+                  <div class="stage-index">02</div>
+                  <div class="stage-copy">
+                    <p class="stage-kicker" data-i18n="stage_setup_kicker">识别设置</p>
+                    <h4 data-i18n="stage_setup_title">识别设置</h4>
+                    <p class="stage-note" data-i18n="stage_setup_note">先确定预设、语言和模型。</p>
+                  </div>
+                </div>
+
+                <div class="preset-strip" role="group" aria-label="识别预设">
+                  <button type="button" class="preset-chip is-active" data-preset="balanced" data-i18n="preset_balanced">平衡</button>
+                  <button type="button" class="preset-chip" data-preset="speed" data-i18n="preset_speed">极速</button>
+                  <button type="button" class="preset-chip" data-preset="delivery" data-i18n="preset_delivery">交付优先</button>
+                </div>
+
+                <div class="control-grid control-grid-core">
+                  <label class="field">
+                    <span data-i18n="field_language">识别语言</span>
+                    <select id="language"></select>
+                  </label>
+
+                  <label class="field">
+                    <span data-i18n="field_model">模型大小</span>
+                    <select id="model-size">
+                      <option value="small">small</option>
+                      <option value="medium">medium</option>
+                      <option value="large-v3" selected data-i18n="model_large_v3">large-v3（默认）</option>
+                    </select>
+                  </label>
+
+                  <div class="field field-wide capability-card">
+                    <span data-i18n="field_outputs">标准输出</span>
+                    <div class="format-card format-card-stacked">
+                      <p data-i18n="outputs_subtitle">字幕：SRT / VTT / TXT / JSON / ASS</p>
+                      <p data-i18n="outputs_doc">文稿：Markdown / DOCX</p>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <section class="stage-panel stage-panel-delivery">
+                <div class="stage-head">
+                  <div class="stage-index">03</div>
+                  <div class="stage-copy">
+                    <p class="stage-kicker" data-i18n="stage_delivery_kicker">增强交付</p>
+                    <h4 data-i18n="stage_delivery_title">增强交付</h4>
+                    <p class="stage-note" data-i18n="stage_delivery_note">直接配置双语、说话人、断句和字幕风格。</p>
+                  </div>
+                </div>
+
+                <div id="delivery-panel" class="control-grid control-grid-advanced">
+                  <label class="field">
+                    <span data-i18n="field_translate">双语翻译</span>
+                    <select id="translate-to"></select>
+                  </label>
+
+                  <label class="field">
+                    <span data-i18n="field_diarization">说话人分离</span>
+                    <select id="diarization">
+                      <option value="off" data-i18n="option_off">关闭</option>
+                      <option value="on" data-i18n="option_on_experimental">开启（实验性）</option>
+                    </select>
+                  </label>
+
+                  <label class="field">
+                    <span data-i18n="field_speakers">说话人数</span>
+                    <select id="speaker-count">
+                      <option value="2" selected>2</option>
+                      <option value="3">3</option>
+                      <option value="4">4</option>
+                    </select>
+                  </label>
+
+                  <label class="field">
+                    <span data-i18n="field_split">断句优化</span>
+                    <select id="smart-split">
+                      <option value="on" selected data-i18n="option_on_recommended">开启（推荐）</option>
+                      <option value="off" data-i18n="option_off">关闭</option>
+                    </select>
+                  </label>
+
+                  <label class="field">
+                    <span data-i18n="field_ass_style">ASS 模板</span>
+                    <select id="ass-style">
+                      <option value="variety" selected data-i18n="ass_variety">综艺描边</option>
+                      <option value="punch" data-i18n="ass_punch">热词冲击</option>
+                      <option value="neon" data-i18n="ass_neon">霓虹字幕</option>
+                    </select>
+                  </label>
+                </div>
+              </section>
+            </div>
+
+            <div class="action-strip">
+              <div class="action-copy">
+                <p class="action-kicker" data-i18n="summary_kicker">任务摘要</p>
+                <div class="action-summary">
+                  <span id="summary-preset" class="summary-chip">平衡</span>
+                  <span id="summary-language" class="summary-chip">自动检测</span>
+                  <span id="summary-model" class="summary-chip">large-v3</span>
+                  <span id="summary-enhancement" class="summary-chip summary-chip-muted">标准交付</span>
+                </div>
+                <p id="action-note" class="action-note">输出 SRT / ASS / 文稿，完成后可继续进入时间轴和视频预览精修。</p>
+              </div>
+              <button id="submit-button" type="submit" class="primary-button" data-i18n="submit_start">开始批量转写</button>
+            </div>
+          </form>
+
+          <section id="job-card" class="job-card" aria-live="polite">
+            <div class="panel-head">
+              <div>
+                <p class="panel-label" data-i18n="runtime_label">任务运行</p>
+                <h3 id="job-status-text">运行面板</h3>
+                <p class="panel-subline" data-i18n="runtime_subline">这里会保留草稿、已完成历史和下载产物，刷新后自动恢复。</p>
+              </div>
+              <div class="runtime-actions">
+                <select id="job-filter" class="mini-select">
+                  <option value="all" data-i18n="filter_all">全部任务</option>
+                  <option value="draft" data-i18n="filter_draft">草稿</option>
+                  <option value="running" data-i18n="filter_running">运行中</option>
+                  <option value="completed" data-i18n="filter_completed">已完成</option>
+                  <option value="failed" data-i18n="filter_failed">失败</option>
+                </select>
+                <button id="poll-toggle-button" type="button" class="secondary-button compact-button">暂停轮询</button>
+                <div id="job-pill" class="status-pill hidden">待命</div>
+              </div>
+            </div>
+
+            <div class="progress-panel">
+              <div class="progress-track">
+                <div id="progress-bar" class="progress-bar"></div>
+              </div>
+              <div class="job-facts">
+                <div class="fact">
+                  <span data-i18n="runtime_fact_status">状态</span>
+                  <strong id="job-message" data-i18n="runtime_waiting_submit">等待提交</strong>
+                </div>
+                <div class="fact">
+                  <span data-i18n="runtime_fact_language">默认语言</span>
+                  <strong id="job-language">自动检测</strong>
+                </div>
+              </div>
+            </div>
+
+            <div id="runtime-guide" class="subpanel runtime-guide">
+              <div class="subpanel-head">
+                <span data-i18n="runtime_flow_title">处理流程</span>
+              </div>
+              <div class="runtime-steps">
+                <div class="runtime-step is-active" data-step="submit">
+                  <strong data-i18n="runtime_step_submit_title">01 提交任务</strong>
+                  <span data-i18n="runtime_step_submit_note">导入媒体并开始转写</span>
+                </div>
+                <div class="runtime-step" data-step="recognize">
+                  <strong data-i18n="runtime_step_recognize_title">02 识别处理中</strong>
+                  <span data-i18n="runtime_step_recognize_note">Whisper 本地推理与断句</span>
+                </div>
+                <div class="runtime-step" data-step="deliver">
+                  <strong data-i18n="runtime_step_deliver_title">03 产物生成</strong>
+                  <span data-i18n="runtime_step_deliver_note">SRT / ASS / 文稿统一导出</span>
+                </div>
+                <div class="runtime-step" data-step="refine">
+                  <strong data-i18n="runtime_step_refine_title">04 继续精修</strong>
+                  <span data-i18n="runtime_step_refine_note">进入时间轴编辑与视频预览</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="subpanel">
+              <div class="subpanel-head">
+                <span data-i18n="runtime_history_title">草稿与历史</span>
+              </div>
+              <div id="job-list" class="job-list"></div>
+            </div>
+
+            <div id="pending-output-group" class="download-group pending-output-group">
+              <div class="download-placeholder bundle-placeholder">
+                <strong data-i18n="pending_outputs_title">待生成产物</strong>
+                <span data-i18n="pending_outputs_note">任务完成后可一键下载 ZIP 和全部字幕文件。</span>
+              </div>
+              <div class="download-placeholder" data-i18n="format_srt">SRT</div>
+              <div class="download-placeholder" data-i18n="format_ass">ASS</div>
+              <div class="download-placeholder" data-i18n="format_txt">TXT</div>
+              <div class="download-placeholder" data-i18n="format_docx">DOCX</div>
+            </div>
+
+            <div id="download-group" class="download-group hidden">
+              <a id="download-bundle-link" class="download-link bundle-link" href="#" data-i18n="download_bundle">下载全部 ZIP</a>
+              <a id="download-srt-link" class="download-link" href="#" data-i18n="download_srt">下载 SRT</a>
+              <a id="download-vtt-link" class="download-link secondary-link" href="#" data-i18n="download_vtt">下载 VTT</a>
+              <a id="download-txt-link" class="download-link secondary-link" href="#" data-i18n="download_txt">下载 TXT</a>
+              <a id="download-json-link" class="download-link secondary-link" href="#" data-i18n="download_json">下载 JSON</a>
+              <a id="download-md-link" class="download-link secondary-link" href="#" data-i18n="download_md">下载 Markdown</a>
+              <a id="download-docx-link" class="download-link secondary-link" href="#" data-i18n="download_docx">下载 DOCX</a>
+              <a id="download-ass-link" class="download-link secondary-link" href="#" data-i18n="download_ass">下载 ASS</a>
+              <a id="download-bilingual-srt-link" class="download-link secondary-link hidden" href="#" data-i18n="download_bilingual_srt">下载双语 SRT</a>
+              <a id="download-bilingual-txt-link" class="download-link secondary-link hidden" href="#" data-i18n="download_bilingual_txt">下载双语 TXT</a>
+              <a id="download-bilingual-md-link" class="download-link secondary-link hidden" href="#" data-i18n="download_bilingual_md">下载双语 Markdown</a>
+              <a id="download-bilingual-docx-link" class="download-link secondary-link hidden" href="#" data-i18n="download_bilingual_docx">下载双语 DOCX</a>
+              <a id="download-bilingual-ass-link" class="download-link secondary-link hidden" href="#" data-i18n="download_bilingual_ass">下载双语 ASS</a>
+            </div>
+          </section>
+        </section>
+
+        <section id="preview-grid" class="preview-grid hidden">
+          <section class="preview-card">
+            <div class="panel-head">
+              <div>
+                <p class="panel-label" data-i18n="preview_label">实时预览</p>
+                <h3 data-i18n="preview_title">视频与字幕实时预览</h3>
+              </div>
+            </div>
+            <div class="video-stage">
+              <video id="video-preview" class="video-preview" controls playsinline></video>
+              <div id="audio-preview" class="audio-preview hidden">
+                <div class="audio-preview-orb" aria-hidden="true"></div>
+                <p class="audio-preview-label" data-i18n="audio_preview_label">音频预览</p>
+              </div>
+              <div id="subtitle-overlay" class="subtitle-overlay variety" data-i18n="subtitle_preview_default">综艺感字幕预览</div>
+            </div>
+            <div id="audio-player-wrap" class="audio-player-wrap hidden">
+              <audio id="audio-player" class="audio-player" controls preload="metadata"></audio>
+            </div>
+          </section>
+
+          <section class="preview-card preview-mini">
+            <div class="panel-head">
+              <div>
+                <p class="panel-label" data-i18n="quick_edit_label">快速修改</p>
+                <h3 data-i18n="quick_edit_title">当前片段修改预览</h3>
+              </div>
+            </div>
+            <div class="preview-form">
+              <label class="field">
+                <span data-i18n="preview_field_speaker">说话人</span>
+                <input id="preview-speaker" type="text" class="preview-input" placeholder="可留空" data-i18n-placeholder="preview_placeholder_speaker" />
+              </label>
+              <div class="preview-time-grid">
+                <label class="field">
+                  <span data-i18n="preview_field_start">开始</span>
+                  <input id="preview-start" type="text" class="preview-input" placeholder="00:00:00.000" />
+                </label>
+                <label class="field">
+                  <span data-i18n="preview_field_end">结束</span>
+                  <input id="preview-end" type="text" class="preview-input" placeholder="00:00:00.000" />
+                </label>
+              </div>
+              <label class="field">
+                <span data-i18n="preview_field_text">字幕内容</span>
+                <textarea id="preview-text" class="preview-textarea" placeholder="选择左侧片段后可直接在这里修改" data-i18n-placeholder="preview_placeholder_text"></textarea>
+              </label>
+            </div>
+            <p id="preview-edit-note" class="editor-note" data-i18n="preview_edit_hint">点选左侧时间轴任意片段，这里会立即进入修改状态。</p>
+          </section>
+        </section>
+
+        <section id="editor-card" class="editor-card hidden">
+          <div class="panel-head panel-head-editor">
+            <div class="editor-head-copy">
+              <p class="panel-label" data-i18n="timeline_label">时间轴编辑</p>
+              <h3 id="editor-title" data-i18n="editor_title">编辑字幕</h3>
+            </div>
+            <div class="editor-toolbar editor-toolbar-block">
+              <label class="secondary-button compact-button video-picker">
+                <span data-i18n="editor_load_preview">载入本地视频预览</span>
+                <input id="video-input" type="file" accept="video/*" hidden />
+              </label>
+              <button id="undo-button" type="button" class="secondary-button compact-button" data-i18n="editor_undo">撤销</button>
+              <button id="redo-button" type="button" class="secondary-button compact-button" data-i18n="editor_redo">重做</button>
+              <button id="add-segment-button" type="button" class="secondary-button compact-button" data-i18n="editor_add_segment">新增一段</button>
+              <button id="save-editor-button" type="button" class="secondary-button" data-i18n="editor_save">保存修改</button>
+            </div>
+          </div>
+          <div class="editor-note-row">
+            <p class="editor-note" data-i18n="editor_shortcuts">支持键盘编辑、行内增删段、合并拆分。快捷键：`Ctrl/Cmd + S` 保存，`Ctrl/Cmd + Enter` 在当前段后新增。</p>
+            <p id="editor-draft-state" class="editor-note editor-draft-state" data-i18n="draft_hint">草稿会自动保存到本地任务仓库。</p>
+          </div>
+          <section class="qc-panel">
+            <div class="qc-head">
+              <div>
+                <p class="panel-label" data-i18n="quality_label">字幕质检</p>
+                <h4 data-i18n="quality_title">字幕质检面板</h4>
+              </div>
+            </div>
+            <div class="qc-toolbar">
+              <div id="qc-summary" class="qc-summary"></div>
+              <div class="qc-actions">
+                <button id="qc-fix-format-button" type="button" class="secondary-button compact-button" data-i18n="qc_fix_format">仅修格式</button>
+                <button id="qc-fix-button" type="button" class="primary-button compact-button qc-fix-button" data-i18n="qc_fix_all">修复全部</button>
+                <button id="qc-scan-button" type="button" class="secondary-button compact-button" data-i18n="qc_scan">重新扫描</button>
+              </div>
+            </div>
+            <div id="qc-list" class="qc-list"></div>
+          </section>
+          <div id="editor-list" class="editor-list"></div>
+        </section>
+        <footer class="app-footer">
+          <p>XM Subtitle Studio</p>
+          <p data-i18n="footer_copy">© 2026 XM. All rights reserved.</p>
+        </footer>
+      </main>
+    </div>
+
+    <script src="/static/app.js" defer></script>
+  </body>
+</html>

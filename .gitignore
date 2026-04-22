@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+*.pyc
+uploads/
+outputs/
+models/
+data/jobs.json
+build/
+dist/
+*.spec.tmp
+.DS_Store
+test.mp4
+*.log
