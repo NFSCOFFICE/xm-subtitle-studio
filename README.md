@@ -164,6 +164,7 @@ Automatic update checks can be added later through GitHub Releases or a public `
 - Translation and speaker features may download additional local models on first use.
 - `large-v3` gives better accuracy, but first download and transcription are slower.
 - Use a smaller model in the UI if speed matters more than accuracy.
+- To protect the first words, transcription adds a temporary 1s lead-in silence and subtracts it from generated subtitle timecodes. Exports stay aligned to the original media.
 
 ## Project Structure
 

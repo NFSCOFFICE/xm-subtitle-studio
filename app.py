@@ -128,6 +128,13 @@ TRANSLATION_MODELS = {
     ("it", "en"): "Helsinki-NLP/opus-mt-it-en",
 }
 PUNCTUATION_SPLIT_RE = re.compile(r"(?<=[。！？!?；;：:,，])\s*")
+TRANSCRIPTION_LEAD_SILENCE_SECONDS = 1.0
+WHISPER_VAD_PARAMETERS = {
+    "threshold": 0.35,
+    "min_speech_duration_ms": 120,
+    "min_silence_duration_ms": 600,
+    "speech_pad_ms": 600,
+}
 
 
 def serialize_job(job: JobState) -> Dict[str, object]:
@@ -224,6 +231,42 @@ def get_audio_duration(file_path: Path) -> float:
     return float(duration or 0)
 
 
+def prepare_audio_for_transcription(file_path: Path) -> tuple[Path, float, Optional[Path]]:
+    """Add lead-in silence so VAD/Whisper do not clip first words."""
+    if TRANSCRIPTION_LEAD_SILENCE_SECONDS <= 0:
+        return file_path, 0.0, None
+
+    temp_dir = Path(tempfile.mkdtemp(prefix="subtitle-transcribe-"))
+    padded_path = temp_dir / "lead-padded.wav"
+    subprocess.run(
+        [
+            "ffmpeg",
+            "-y",
+            "-f",
+            "lavfi",
+            "-t",
+            str(TRANSCRIPTION_LEAD_SILENCE_SECONDS),
+            "-i",
+            "anullsrc=channel_layout=stereo:sample_rate=16000",
+            "-i",
+            str(file_path),
+            "-filter_complex",
+            "[1:a]aformat=channel_layouts=stereo,aresample=16000[a1];[0:a][a1]concat=n=2:v=0:a=1[out]",
+            "-map",
+            "[out]",
+            "-ac",
+            "2",
+            "-ar",
+            "16000",
+            str(padded_path),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return padded_path, TRANSCRIPTION_LEAD_SILENCE_SECONDS, temp_dir
+
+
 def format_timestamp(seconds: float) -> str:
     milliseconds = max(0, int(round(seconds * 1000)))
     hours, remainder = divmod(milliseconds, 3_600_000)
@@ -251,6 +294,18 @@ def sanitize_segments(segments: List[dict]) -> List[dict]:
             item["translation"] = str(segment["translation"]).strip()
         cleaned.append(item)
     return cleaned
+
+
+def shift_segments(segments: List[dict], offset_seconds: float) -> List[dict]:
+    if not offset_seconds:
+        return segments
+    shifted: List[dict] = []
+    for segment in segments:
+        item = dict(segment)
+        item["start"] = max(0.0, float(item.get("start", 0)) - offset_seconds)
+        item["end"] = max(item["start"], float(item.get("end", 0)) - offset_seconds)
+        shifted.append(item)
+    return shifted
 
 
 def split_text_for_subtitles(text: str, max_chars: int = 26) -> List[str]:
@@ -663,19 +718,25 @@ def transcribe_job(
     smart_split: bool,
     ass_style: str,
 ) -> None:
+    transcription_audio_path = audio_path
+    lead_offset = 0.0
+    transcription_temp_dir: Optional[Path] = None
     try:
         update_job(job_id, status="running", progress=0.05, message="Loading model")
         model = load_model(model_size)
 
         total_duration = get_audio_duration(audio_path)
+        transcription_audio_path, lead_offset, transcription_temp_dir = prepare_audio_for_transcription(audio_path)
         task_language = None if language == "auto" else language
 
         update_job(job_id, progress=0.15, message="Running offline transcription")
         segments_iter, info = model.transcribe(
-            str(audio_path),
+            str(transcription_audio_path),
             language=task_language,
             vad_filter=True,
+            vad_parameters=WHISPER_VAD_PARAMETERS,
             beam_size=5,
+            language_detection_segments=3,
             word_timestamps=False,
         )
 
@@ -702,7 +763,7 @@ def transcribe_job(
         if not segments:
             raise RuntimeError("No speech was detected in the uploaded audio.")
 
-        segments = sanitize_segments(segments)
+        segments = sanitize_segments(shift_segments(segments, lead_offset))
         if smart_split:
             update_job(job_id, progress=0.78, message="Optimizing subtitle breaks")
             segments = optimize_subtitle_segments(segments)
@@ -735,6 +796,9 @@ def transcribe_job(
             message="Transcription failed",
             error=str(exc),
         )
+    finally:
+        if transcription_temp_dir:
+            shutil.rmtree(transcription_temp_dir, ignore_errors=True)
 
 
 @app.get("/")
