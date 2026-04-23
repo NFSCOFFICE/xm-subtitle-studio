@@ -72,13 +72,7 @@ Open:
 http://127.0.0.1:8000
 ```
 
-LAN access is also supported:
-
-```text
-http://your-local-ip:8000
-```
-
-On macOS, allow Python incoming connections if the firewall blocks LAN access.
+By default, the app only listens on `127.0.0.1` and is not shared on the local network.
 
 ## Desktop App
 

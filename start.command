@@ -12,16 +12,12 @@ source .venv/bin/activate
 
 python -m pip install --quiet --disable-pip-version-check -r requirements.txt
 
-HOST="0.0.0.0"
+HOST="127.0.0.1"
 PORT="8000"
-LAN_IP="$(ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null || true)"
 
 echo ""
 echo "Offline Subtitle Studio"
 echo "Starting server at http://127.0.0.1:${PORT}"
-if [ -n "$LAN_IP" ]; then
-  echo "LAN access        http://${LAN_IP}:${PORT}"
-fi
 echo ""
 
 open "http://127.0.0.1:${PORT}"
