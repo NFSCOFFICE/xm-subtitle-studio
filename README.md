@@ -1,22 +1,45 @@
 # XM Subtitle Studio
 
-本地离线媒体转字幕工具，带前端拖拽界面。
+本地离线字幕识别与交付工作台。拖入音频或视频，使用 Whisper large-v3 在本机完成转写，生成带时间码的字幕、文稿和可继续精修的时间轴草稿。
 
-## 功能
+![License](https://img.shields.io/badge/license-MIT-7dd3fc)
+![Whisper](https://img.shields.io/badge/Whisper-large--v3-60a5fa)
+![Offline](https://img.shields.io/badge/runtime-local%20offline-34d399)
+![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows-94a3b8)
 
-- 拖入音频或视频文件生成 `.srt`
-- 支持 `mp3`、`wav`、`m4a`、`aac`、`flac`、`ogg`、`mp4`、`mov`、`mkv`、`webm`、`m4v`、`avi`
-- Whisper 离线识别
-- 自动识别语言，也可手动指定
-- 支持批量转写
-- 输出 `srt / vtt / txt / json`
-- 逐字稿导出 `Markdown / DOCX`
-- 可选双语字幕导出
-- 可选说话人分离（实验性）
-- 可选字幕断句优化（推荐开启）
-- 可直接编辑时间轴并保存
+## Why
 
-## 启动
+XM Subtitle Studio 面向需要稳定交付字幕的人，而不是普通上传页。
+
+- 本地离线处理：媒体文件不需要上传到云端。
+- 音频视频统一入口：MP3、WAV、M4A、MP4、MOV、MKV 等文件走同一套流程。
+- 默认 high accuracy：默认使用 Whisper large-v3，优先保证识别质量。
+- 交付友好：输出 SRT、VTT、TXT、JSON、ASS、Markdown、DOCX。
+- 时间轴可编辑：识别完成后可直接精修字幕片段、时间码和内容。
+- 任务可恢复：支持草稿、历史任务、产物下载和刷新后的任务恢复。
+
+## Features
+
+| Area | Capability |
+| --- | --- |
+| Recognition | Whisper 离线识别、自动语言检测、手动语言选择 |
+| Media | 支持音频和视频导入，视频可进入实时预览 |
+| Timeline | 行内编辑、增删段、合并、拆分、区间播放 |
+| Delivery | SRT、VTT、TXT、JSON、ASS、Markdown、DOCX |
+| Quality Check | 扫描空字幕、时间重叠、过短过长、行长超限、可疑文本 |
+| Enhancement | 双语字幕、说话人标记、断句优化、综艺 ASS 模板 |
+| Workflow | 批量转写、暂停轮询、任务筛选、ZIP 下载全部产物 |
+| Desktop | macOS / Windows 桌面客户端封装 |
+
+## Supported Formats
+
+```text
+Audio: MP3 / WAV / M4A / AAC / FLAC / OGG
+Video: MP4 / MOV / MKV / WEBM / M4V / AVI
+Export: SRT / VTT / TXT / JSON / ASS / Markdown / DOCX
+```
+
+## Quick Start
 
 ```bash
 python3 -m pip install -r requirements.txt
@@ -24,90 +47,108 @@ chmod +x run.sh
 ./run.sh
 ```
 
-浏览器打开：
+Open:
 
 ```text
 http://127.0.0.1:8000
 ```
 
-同一局域网设备也可以访问：
+LAN access is also supported:
 
 ```text
-http://你的本机局域网IP:8000
+http://your-local-ip:8000
 ```
 
-例如当前机器可用：
+On macOS, allow Python incoming connections if the firewall blocks LAN access.
 
-```text
-http://192.168.1.111:8000
-```
+## Desktop App
 
-## 说明
+The desktop client wraps the FastAPI backend and the web UI with `pywebview`, then packages it with PyInstaller.
 
-- 第一次运行会下载 Whisper 模型到 `models/`，之后可离线使用。
-- 如果开启双语导出，第一次也会下载本地翻译模型。
-- 如果开启说话人分离，第一次也会初始化本地说话人嵌入模型。
-- 上传的媒体文件保存在 `uploads/`
-- 生成的字幕保存在 `outputs/`
-- 如需局域网访问，请确保 macOS 防火墙允许 Python 接收传入连接
-- 默认使用 `large-v3`，准确率更高，但首次下载和转写都会更慢
-- 如果你更在意速度，也可以在界面里切回 `small` 或 `medium`
-
-## 桌面客户端
-
-这个项目已经补了桌面封装入口，可打包成 macOS 和 Windows 客户端，用户可以直接下载后双击使用。
-
-### 自动生成下载包
-
-GitHub Actions 已配置跨平台构建：
-
-- 手动运行 `Build Desktop Clients` workflow，可下载 macOS / Windows artifacts
-- 推送 `v*` 标签时会自动创建 GitHub Release
-- macOS 产物：`XM-Subtitle-Studio-macOS.dmg` / `.zip`
-- Windows 产物：`XM-Subtitle-Studio-Windows.zip`
-
-发布新版本示例：
-
-```bash
-git tag v0.1.0
-git push origin v0.1.0
-```
-
-### macOS 打包
+### macOS
 
 ```bash
 chmod +x build-mac.command
 ./build-mac.command
 ```
 
-产物目录：
+Output:
 
 ```text
 dist/XM Subtitle Studio.app
+release/XM-Subtitle-Studio-macOS.dmg
+release/XM-Subtitle-Studio-macOS.zip
 ```
 
-### Windows 打包
+### Windows
 
-在 Windows 机器上执行：
+Run on a Windows machine:
 
 ```bat
 build-win.bat
 ```
 
-产物目录：
+Output:
 
 ```text
 dist\XM Subtitle Studio\
+release\XM-Subtitle-Studio-Windows.zip
 ```
 
-### 说明
+## GitHub Release Builds
 
-- 桌面端使用 `pywebview + FastAPI + PyInstaller`
-- macOS 包建议在 macOS 上构建，Windows 包建议在 Windows 上构建
-- 如果你要放到 GitHub Releases，最直接的方式就是把 `dist/` 里的产物压缩后上传
-- 首次运行仍然会在本地下载模型到 `models/`
-- 用户数据、上传文件、输出文件会保存在客户端目录旁边的 `data/`、`uploads/`、`outputs/`
+This repository includes a cross-platform workflow:
 
-## 开源协议
+```text
+.github/workflows/build-desktop.yml
+```
 
-本项目使用 [MIT License](./LICENSE)。
+Use it in either mode:
+
+- Run `Build Desktop Clients` manually from GitHub Actions.
+- Push a version tag such as `v0.1.0` to build and publish a GitHub Release.
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+Artifacts:
+
+- `XM-Subtitle-Studio-macOS.dmg`
+- `XM-Subtitle-Studio-macOS.zip`
+- `XM-Subtitle-Studio-Windows.zip`
+
+## Offline Model Notes
+
+- The first run downloads Whisper models into `models/`.
+- After models are downloaded, recognition can run offline.
+- Translation and speaker features may download additional local models on first use.
+- `large-v3` gives better accuracy, but first download and transcription are slower.
+- Use a smaller model in the UI if speed matters more than accuracy.
+
+## Project Structure
+
+```text
+.
+├── app.py                  # FastAPI backend and transcription pipeline
+├── static/                 # Frontend UI
+├── desktop_app.py          # Desktop wrapper entry
+├── desktop_app.spec        # PyInstaller configuration
+├── build-mac.command       # macOS desktop build script
+├── build-win.bat           # Windows desktop build script
+├── requirements.txt        # Runtime dependencies
+├── requirements-desktop.txt
+├── uploads/                # Local imported media, ignored by git
+├── outputs/                # Generated subtitles/docs, ignored by git
+├── models/                 # Local model cache, ignored by git
+└── data/                   # Local task drafts/history
+```
+
+## Privacy
+
+XM Subtitle Studio is designed as a local-first tool. Imported media, generated subtitles, drafts, and model files stay on the local machine unless you manually upload or share them.
+
+## License
+
+[MIT License](./LICENSE)
