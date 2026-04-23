@@ -7,6 +7,8 @@
 ![Offline](https://img.shields.io/badge/runtime-local%20offline-34d399)
 ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows-94a3b8)
 
+Repository: [github.com/NFSCOFFICE/xm-subtitle-studio](https://github.com/NFSCOFFICE/xm-subtitle-studio)
+
 ## Why
 
 XM Subtitle Studio 面向需要稳定交付字幕的人，而不是普通上传页。
@@ -41,6 +43,15 @@ Export: SRT / VTT / TXT / JSON / ASS / Markdown / DOCX
 
 ## Quick Start
 
+Clone the public repository:
+
+```bash
+git clone https://github.com/NFSCOFFICE/xm-subtitle-studio.git
+cd xm-subtitle-studio
+```
+
+Run the web app:
+
 ```bash
 python3 -m pip install -r requirements.txt
 chmod +x run.sh
@@ -65,6 +76,10 @@ On macOS, allow Python incoming connections if the firewall blocks LAN access.
 
 The desktop client wraps the FastAPI backend and the web UI with `pywebview`, then packages it with PyInstaller.
 
+When release assets are available, users can download ready-to-use builds from:
+
+[github.com/NFSCOFFICE/xm-subtitle-studio/releases](https://github.com/NFSCOFFICE/xm-subtitle-studio/releases)
+
 ### macOS
 
 ```bash
@@ -85,6 +100,8 @@ release/XM-Subtitle-Studio-macOS.zip
 Run on a Windows machine:
 
 ```bat
+git clone https://github.com/NFSCOFFICE/xm-subtitle-studio.git
+cd xm-subtitle-studio
 build-win.bat
 ```
 
@@ -118,6 +135,18 @@ Artifacts:
 - `XM-Subtitle-Studio-macOS.dmg`
 - `XM-Subtitle-Studio-macOS.zip`
 - `XM-Subtitle-Studio-Windows.zip`
+
+Note: PyInstaller builds are platform-specific. Build macOS packages on macOS and Windows packages on Windows, or use GitHub Actions to generate both.
+
+## Updates
+
+Current desktop builds use manual updates:
+
+1. Download the latest release package.
+2. Replace the old app with the new version.
+3. Existing local models, uploads, outputs, drafts, and history remain on the local machine.
+
+Automatic update checks can be added later through GitHub Releases or a public `version.json` manifest.
 
 ## Offline Model Notes
 
