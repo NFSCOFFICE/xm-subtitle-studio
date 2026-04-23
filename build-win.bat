@@ -6,6 +6,7 @@ py -m venv .venv-desktop
 call .venv-desktop\Scripts\activate.bat
 python -m pip install --upgrade pip
 python -m pip install -r requirements-desktop.txt
+python -m pip uninstall -y typing
 pyinstaller --noconfirm desktop_app.spec
 
 echo.

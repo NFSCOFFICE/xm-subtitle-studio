@@ -27,6 +27,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements-desktop.txt
+          python -m pip uninstall -y typing || true
 
       - name: Build app
         run: pyinstaller --noconfirm desktop_app.spec
@@ -74,6 +75,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements-desktop.txt
+          python -m pip uninstall -y typing
 
       - name: Build app
         run: pyinstaller --noconfirm desktop_app.spec
