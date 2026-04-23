@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import mimetypes
+import os
 import re
 import shutil
 import subprocess
@@ -42,6 +43,7 @@ OUTPUT_DIR = APP_DIR / "outputs"
 MODEL_DIR = APP_DIR / "models"
 DATA_DIR = APP_DIR / "data"
 JOB_STORE_PATH = DATA_DIR / "jobs.json"
+VENDOR_FFMPEG_BIN = APP_DIR / "vendor" / "ffmpeg" / "bin"
 ALLOWED_SUFFIXES = {
     ".mp3",
     ".wav",
@@ -61,6 +63,12 @@ SUPPORTED_MEDIA_LABEL = ", ".join(sorted(suffix.lstrip(".") for suffix in ALLOWE
 
 for directory in (STATIC_DIR, UPLOAD_DIR, OUTPUT_DIR, MODEL_DIR, DATA_DIR):
     directory.mkdir(parents=True, exist_ok=True)
+
+if VENDOR_FFMPEG_BIN.exists():
+    os_path = str(VENDOR_FFMPEG_BIN)
+    path_parts = os.environ.get("PATH", "").split(os.pathsep)
+    if os_path not in path_parts:
+        os.environ["PATH"] = os_path + os.pathsep + os.environ.get("PATH", "")
 
 
 @dataclass

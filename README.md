@@ -58,6 +58,14 @@ chmod +x run.sh
 ./run.sh
 ```
 
+Windows one-command start:
+
+```bat
+start-win.bat
+```
+
+`start-win.bat` creates `.venv`, installs Python dependencies, checks FFmpeg, downloads a local FFmpeg build into `vendor\ffmpeg` when needed, then starts the web app.
+
 Open:
 
 ```text
@@ -151,6 +159,7 @@ Automatic update checks can be added later through GitHub Releases or a public `
 ## Offline Model Notes
 
 - The first run downloads Whisper models into `models/`.
+- On Windows, `start-win.bat` can download FFmpeg into `vendor\ffmpeg` automatically if FFmpeg is not already installed.
 - After models are downloaded, recognition can run offline.
 - Translation and speaker features may download additional local models on first use.
 - `large-v3` gives better accuracy, but first download and transcription are slower.
@@ -171,6 +180,7 @@ Automatic update checks can be added later through GitHub Releases or a public `
 ├── uploads/                # Local imported media, ignored by git
 ├── outputs/                # Generated subtitles/docs, ignored by git
 ├── models/                 # Local model cache, ignored by git
+├── vendor/                 # Optional local FFmpeg on Windows
 └── data/                   # Local task drafts/history
 ```
 

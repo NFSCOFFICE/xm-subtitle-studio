@@ -5,6 +5,7 @@ __pycache__/
 uploads/
 outputs/
 models/
+vendor/
 data/jobs.json
 build/
 dist/
