@@ -169,7 +169,7 @@ def load_jobs_from_disk() -> Dict[str, JobState]:
         job = JobState(**job_data)
         if job.status in {"queued", "running"}:
             job.status = "failed"
-            job.message = "服务重启，未完成任务已转为草稿，请重新提交。"
+            job.message = "Service restarted. Unfinished jobs were converted to drafts. Please submit again."
             job.error = "Interrupted by server restart."
         restored[job.job_id] = job
     return restored
@@ -824,7 +824,7 @@ def save_draft(job_id: str, payload: Dict[str, List[dict]]) -> Dict[str, object]
         job_id,
         draft_segments=cleaned_segments,
         draft_updated_at=utc_now(),
-        message="草稿已自动保存",
+        message="Draft auto-saved",
     )
 
     with jobs_lock:

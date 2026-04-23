@@ -208,6 +208,7 @@ const I18N = {
     draft_hint: "草稿会自动保存到本地任务仓库。",
     runtime_fact_status: "状态",
     runtime_fact_language: "默认语言",
+    runtime_language_auto: "自动检测",
     runtime_waiting_submit: "等待提交",
     runtime_flow_title: "处理流程",
     runtime_step_submit_title: "01 提交任务",
@@ -268,6 +269,40 @@ const I18N = {
     delete_confirm: "删除任务“{name}”及其草稿、历史和导出文件？",
     submit_failed: "提交失败",
     upload_failed: "上传失败：{name}",
+    files_count_suffix: " ... 共 {count} 个文件",
+    qc_empty_subtitle: "空字幕",
+    qc_empty_detail: "当前字幕内容为空。",
+    qc_short_duration: "时长过短",
+    qc_short_detail: "仅 {duration}s，建议至少 {minimum}s。",
+    qc_long_duration: "时长过长",
+    qc_long_detail: "达到 {duration}s，建议拆分。",
+    qc_line_too_long: "行长超限",
+    qc_line_detail: "最长 {length} 字，建议控制在 {maximum} 字内。",
+    qc_suspicious: "可疑错词",
+    qc_suspicious_detail: "请检查：{tokens}",
+    qc_overlap: "时间重叠",
+    qc_overlap_detail: "与上一段重叠 {duration}s。",
+    qc_errors: "{count} 个严重问题",
+    qc_warns: "{count} 个建议修正",
+    qc_segments: "共 {count} 段",
+    qc_pass: "质检通过",
+    qc_empty_pass: "当前字幕未发现明显交付风险。",
+    editor_add_below: "新增下方",
+    editor_split_current: "拆分当前",
+    editor_merge_next: "合并下段",
+    editor_delete_segment: "删除本段",
+    backend_restart_draft: "服务重启，未完成任务已转为草稿，请重新提交。",
+    backend_loading_model: "正在加载模型",
+    backend_transcribing: "正在离线转写",
+    backend_building_timeline: "正在生成字幕时间轴",
+    backend_optimizing_breaks: "正在优化断句",
+    backend_detecting_speakers: "正在检测说话人",
+    backend_preparing_exports: "正在准备导出文件",
+    backend_writing_files: "正在写入字幕文件",
+    backend_ready: "字幕文件已生成",
+    backend_failed: "转写失败",
+    backend_draft_saved: "草稿已自动保存",
+    backend_timeline_updated: "字幕时间轴已更新",
   },
   en: {
     meta_model: "Whisper large-v3",
@@ -364,6 +399,7 @@ const I18N = {
     draft_hint: "Drafts are saved automatically to the local task store.",
     runtime_fact_status: "Status",
     runtime_fact_language: "Language",
+    runtime_language_auto: "Auto detect",
     runtime_waiting_submit: "Waiting to submit",
     runtime_flow_title: "Pipeline",
     runtime_step_submit_title: "01 Submit job",
@@ -424,6 +460,40 @@ const I18N = {
     delete_confirm: "Delete job “{name}” and remove its draft, history, and exported files?",
     submit_failed: "Submit failed",
     upload_failed: "Upload failed: {name}",
+    files_count_suffix: " ... {count} files",
+    qc_empty_subtitle: "Empty subtitle",
+    qc_empty_detail: "This subtitle segment is empty.",
+    qc_short_duration: "Too short",
+    qc_short_detail: "Only {duration}s. Recommended minimum is {minimum}s.",
+    qc_long_duration: "Too long",
+    qc_long_detail: "{duration}s long. Consider splitting it.",
+    qc_line_too_long: "Line too long",
+    qc_line_detail: "Longest line is {length} chars. Recommended max is {maximum}.",
+    qc_suspicious: "Suspicious text",
+    qc_suspicious_detail: "Check: {tokens}",
+    qc_overlap: "Time overlap",
+    qc_overlap_detail: "Overlaps the previous segment by {duration}s.",
+    qc_errors: "{count} critical issues",
+    qc_warns: "{count} suggestions",
+    qc_segments: "{count} segments",
+    qc_pass: "QA passed",
+    qc_empty_pass: "No obvious delivery risks found.",
+    editor_add_below: "Add below",
+    editor_split_current: "Split current",
+    editor_merge_next: "Merge next",
+    editor_delete_segment: "Delete segment",
+    backend_restart_draft: "Service restarted. Unfinished jobs were converted to drafts. Please submit again.",
+    backend_loading_model: "Loading model",
+    backend_transcribing: "Running offline transcription",
+    backend_building_timeline: "Building subtitle timeline",
+    backend_optimizing_breaks: "Optimizing subtitle breaks",
+    backend_detecting_speakers: "Detecting speakers",
+    backend_preparing_exports: "Preparing exports",
+    backend_writing_files: "Writing subtitle files",
+    backend_ready: "Subtitle file is ready",
+    backend_failed: "Transcription failed",
+    backend_draft_saved: "Draft auto-saved",
+    backend_timeline_updated: "Subtitle timeline updated",
   },
   ja: {
     meta_model: "Whisper large-v3",
@@ -519,6 +589,7 @@ const I18N = {
     draft_hint: "下書きはローカルのタスク保存領域へ自動保存されます。",
     runtime_fact_status: "状態",
     runtime_fact_language: "言語",
+    runtime_language_auto: "自動判定",
     runtime_waiting_submit: "送信待ち",
     runtime_flow_title: "処理フロー",
     runtime_step_submit_title: "01 タスク送信",
@@ -580,6 +651,40 @@ const I18N = {
     delete_failed: "削除に失敗しました",
     submit_failed: "送信に失敗しました",
     upload_failed: "アップロード失敗: {name}",
+    files_count_suffix: " ... 全 {count} ファイル",
+    qc_empty_subtitle: "空の字幕",
+    qc_empty_detail: "この字幕セグメントは空です。",
+    qc_short_duration: "短すぎます",
+    qc_short_detail: "{duration}s のみです。最低 {minimum}s を推奨します。",
+    qc_long_duration: "長すぎます",
+    qc_long_detail: "{duration}s あります。分割を推奨します。",
+    qc_line_too_long: "行が長すぎます",
+    qc_line_detail: "最長 {length} 文字です。{maximum} 文字以内を推奨します。",
+    qc_suspicious: "疑わしい文字列",
+    qc_suspicious_detail: "確認: {tokens}",
+    qc_overlap: "時間重複",
+    qc_overlap_detail: "前のセグメントと {duration}s 重複しています。",
+    qc_errors: "重大な問題 {count} 件",
+    qc_warns: "修正提案 {count} 件",
+    qc_segments: "全 {count} セグメント",
+    qc_pass: "品質チェック通過",
+    qc_empty_pass: "明らかな納品リスクは見つかりません。",
+    editor_add_below: "下に追加",
+    editor_split_current: "現在を分割",
+    editor_merge_next: "次と結合",
+    editor_delete_segment: "削除",
+    backend_restart_draft: "サービスが再起動され、未完了タスクは下書きになりました。再送信してください。",
+    backend_loading_model: "モデルを読み込み中",
+    backend_transcribing: "ローカル文字起こし中",
+    backend_building_timeline: "字幕タイムラインを生成中",
+    backend_optimizing_breaks: "字幕分割を最適化中",
+    backend_detecting_speakers: "話者を検出中",
+    backend_preparing_exports: "出力を準備中",
+    backend_writing_files: "字幕ファイルを書き込み中",
+    backend_ready: "字幕ファイルが生成されました",
+    backend_failed: "文字起こしに失敗しました",
+    backend_draft_saved: "下書きを自動保存しました",
+    backend_timeline_updated: "字幕タイムラインを更新しました",
   },
   el: {
     meta_model: "Whisper large-v3",
@@ -675,6 +780,7 @@ const I18N = {
     draft_hint: "Τα πρόχειρα αποθηκεύονται αυτόματα τοπικά.",
     runtime_fact_status: "Κατάσταση",
     runtime_fact_language: "Γλώσσα",
+    runtime_language_auto: "Αυτόματη ανίχνευση",
     runtime_waiting_submit: "Αναμονή υποβολής",
     runtime_flow_title: "Ροή επεξεργασίας",
     runtime_step_submit_title: "01 Υποβολή εργασίας",
@@ -736,6 +842,40 @@ const I18N = {
     delete_failed: "Αποτυχία διαγραφής",
     submit_failed: "Αποτυχία υποβολής",
     upload_failed: "Αποτυχία μεταφόρτωσης: {name}",
+    files_count_suffix: " ... {count} αρχεία",
+    qc_empty_subtitle: "Κενός υπότιτλος",
+    qc_empty_detail: "Αυτό το τμήμα υποτίτλου είναι κενό.",
+    qc_short_duration: "Πολύ σύντομο",
+    qc_short_detail: "Μόνο {duration}s. Προτείνεται τουλάχιστον {minimum}s.",
+    qc_long_duration: "Πολύ μεγάλο",
+    qc_long_detail: "Διάρκεια {duration}s. Προτείνεται διαχωρισμός.",
+    qc_line_too_long: "Μεγάλη γραμμή",
+    qc_line_detail: "Η μεγαλύτερη γραμμή έχει {length} χαρακτήρες. Προτείνεται έως {maximum}.",
+    qc_suspicious: "Ύποπτο κείμενο",
+    qc_suspicious_detail: "Έλεγχος: {tokens}",
+    qc_overlap: "Επικάλυψη χρόνου",
+    qc_overlap_detail: "Επικαλύπτει το προηγούμενο τμήμα κατά {duration}s.",
+    qc_errors: "{count} σοβαρά θέματα",
+    qc_warns: "{count} προτάσεις",
+    qc_segments: "{count} τμήματα",
+    qc_pass: "Ο έλεγχος πέρασε",
+    qc_empty_pass: "Δεν βρέθηκαν εμφανείς κίνδυνοι παράδοσης.",
+    editor_add_below: "Προσθήκη κάτω",
+    editor_split_current: "Διαχωρισμός",
+    editor_merge_next: "Συγχώνευση επόμενου",
+    editor_delete_segment: "Διαγραφή",
+    backend_restart_draft: "Η υπηρεσία επανεκκινήθηκε. Οι μη ολοκληρωμένες εργασίες έγιναν πρόχειρα. Υπόβαλε ξανά.",
+    backend_loading_model: "Φόρτωση μοντέλου",
+    backend_transcribing: "Τοπική μεταγραφή",
+    backend_building_timeline: "Δημιουργία timeline υποτίτλων",
+    backend_optimizing_breaks: "Βελτιστοποίηση χωρισμών",
+    backend_detecting_speakers: "Ανίχνευση ομιλητών",
+    backend_preparing_exports: "Προετοιμασία εξαγωγών",
+    backend_writing_files: "Εγγραφή αρχείων υποτίτλων",
+    backend_ready: "Το αρχείο υποτίτλων είναι έτοιμο",
+    backend_failed: "Η μεταγραφή απέτυχε",
+    backend_draft_saved: "Το πρόχειρο αποθηκεύτηκε αυτόματα",
+    backend_timeline_updated: "Το timeline υποτίτλων ενημερώθηκε",
   },
 };
 const PRESET_CONFIGS = {
@@ -845,10 +985,12 @@ function applyI18n() {
   pollToggleButton.textContent = pollPaused ? t("poll_resume") : t("poll_pause");
   if (!activeJobId) {
     jobStatusText.textContent = t("runtime_title");
+    jobLanguage.textContent = t("runtime_language_auto");
   }
   if (!activeFiles.length) {
     fileName.textContent = t("file_empty");
   }
+  renderQualityPanel(currentSegments());
 }
 
 function initializePreferences() {
@@ -919,7 +1061,7 @@ function setFiles(files) {
   }
 
   const preview = activeFiles.slice(0, 3).map((file) => file.name).join(" / ");
-  const suffix = activeFiles.length > 3 ? ` ... 共 ${activeFiles.length} 个文件` : "";
+  const suffix = activeFiles.length > 3 ? t("files_count_suffix", { count: activeFiles.length }) : "";
   fileName.textContent = `${preview}${suffix}`;
 }
 
@@ -1092,6 +1234,32 @@ function languageLabel(value) {
   return option ? getLanguageLabel(option) : value;
 }
 
+function displayLanguageLabel(value) {
+  if (!value || value === "-") {
+    return "-";
+  }
+  return languageLabel(value);
+}
+
+function localizeBackendMessage(message) {
+  const messageMap = {
+    "Service restarted. Unfinished jobs were converted to drafts. Please submit again.": "backend_restart_draft",
+    "Loading model": "backend_loading_model",
+    "Running offline transcription": "backend_transcribing",
+    "Building subtitle timeline": "backend_building_timeline",
+    "Optimizing subtitle breaks": "backend_optimizing_breaks",
+    "Detecting speakers": "backend_detecting_speakers",
+    "Preparing exports": "backend_preparing_exports",
+    "Writing subtitle files": "backend_writing_files",
+    "Subtitle file is ready": "backend_ready",
+    "Transcription failed": "backend_failed",
+    "Draft auto-saved": "backend_draft_saved",
+    "Subtitle timeline updated": "backend_timeline_updated",
+  };
+  const key = messageMap[message];
+  return key ? t(key) : (message || "");
+}
+
 function statusLabel(status) {
   const labels = {
     queued: t("status_queued"),
@@ -1246,8 +1414,8 @@ function updateSummary(job) {
   jobPill.classList.remove("hidden");
   jobPill.textContent = statusLabel(pollPaused ? "paused" : (job.status || "running"));
   jobPill.dataset.status = pollPaused ? "paused" : (job.status || "idle");
-  jobMessage.textContent = job.error || job.message || "";
-  jobLanguage.textContent = job.detected_language || job.language || "-";
+  jobMessage.textContent = job.error || localizeBackendMessage(job.message) || "";
+  jobLanguage.textContent = displayLanguageLabel(job.detected_language || job.language);
   progressBar.style.width = `${Math.max(2, Math.round((job.progress || 0) * 100))}%`;
   updateRuntimeSteps(job.status || "idle");
 }
@@ -1394,24 +1562,39 @@ function scanQualityIssues(segments) {
     const longestLine = lines.reduce((max, line) => Math.max(max, line.length), 0);
 
     if (!text) {
-      issues.push({ index, severity: "error", type: "空字幕", detail: "当前字幕内容为空。" });
+      issues.push({ index, severity: "error", type: t("qc_empty_subtitle"), detail: t("qc_empty_detail") });
     }
     if (text && duration < QC_LIMITS.shortDuration) {
-      issues.push({ index, severity: "warn", type: "时长过短", detail: `仅 ${duration.toFixed(2)}s，建议至少 ${QC_LIMITS.shortDuration}s。` });
+      issues.push({
+        index,
+        severity: "warn",
+        type: t("qc_short_duration"),
+        detail: t("qc_short_detail", { duration: duration.toFixed(2), minimum: QC_LIMITS.shortDuration }),
+      });
     }
     if (duration > QC_LIMITS.longDuration) {
-      issues.push({ index, severity: "warn", type: "时长过长", detail: `达到 ${duration.toFixed(2)}s，建议拆分。` });
+      issues.push({
+        index,
+        severity: "warn",
+        type: t("qc_long_duration"),
+        detail: t("qc_long_detail", { duration: duration.toFixed(2) }),
+      });
     }
     if (longestLine > QC_LIMITS.maxLineLength) {
-      issues.push({ index, severity: "warn", type: "行长超限", detail: `最长 ${longestLine} 字，建议控制在 ${QC_LIMITS.maxLineLength} 字内。` });
+      issues.push({
+        index,
+        severity: "warn",
+        type: t("qc_line_too_long"),
+        detail: t("qc_line_detail", { length: longestLine, maximum: QC_LIMITS.maxLineLength }),
+      });
     }
     const suspiciousTokens = extractSuspiciousTokens(text);
     if (suspiciousTokens.length) {
       issues.push({
         index,
         severity: "warn",
-        type: "可疑错词",
-        detail: `请检查：${suspiciousTokens.slice(0, 3).join(" / ")}`,
+        type: t("qc_suspicious"),
+        detail: t("qc_suspicious_detail", { tokens: suspiciousTokens.slice(0, 3).join(" / ") }),
       });
     }
     if (index > 0) {
@@ -1420,8 +1603,8 @@ function scanQualityIssues(segments) {
         issues.push({
           index,
           severity: "error",
-          type: "时间重叠",
-          detail: `与上一段重叠 ${(Number(previous.end) - Number(segment.start)).toFixed(2)}s。`,
+          type: t("qc_overlap"),
+          detail: t("qc_overlap_detail", { duration: (Number(previous.end) - Number(segment.start)).toFixed(2) }),
         });
       }
     }
@@ -1437,18 +1620,18 @@ function renderQualityPanel(segments) {
 
   qcSummary.innerHTML = issues.length
     ? `
-      <span class="qc-chip qc-chip-error">${errors} 个严重问题</span>
-      <span class="qc-chip qc-chip-warn">${warns} 个建议修正</span>
-      <span class="qc-chip">共 ${segments.length} 段</span>
+      <span class="qc-chip qc-chip-error">${t("qc_errors", { count: errors })}</span>
+      <span class="qc-chip qc-chip-warn">${t("qc_warns", { count: warns })}</span>
+      <span class="qc-chip">${t("qc_segments", { count: segments.length })}</span>
     `
     : `
-      <span class="qc-chip qc-chip-pass">质检通过</span>
-      <span class="qc-chip">共 ${segments.length} 段</span>
+      <span class="qc-chip qc-chip-pass">${t("qc_pass")}</span>
+      <span class="qc-chip">${t("qc_segments", { count: segments.length })}</span>
     `;
 
   qcList.innerHTML = "";
   if (!issues.length) {
-    qcList.innerHTML = '<div class="qc-empty">当前字幕未发现明显交付风险。</div>';
+    qcList.innerHTML = `<div class="qc-empty">${t("qc_empty_pass")}</div>`;
     return;
   }
 
@@ -1633,10 +1816,10 @@ function buildEditorRow(segment, index) {
     <input type="text" data-field="end" data-index="${index}" value="${formatEditorTime(segment.end)}" />
     <textarea data-field="text" data-index="${index}">${segment.text || ""}</textarea>
     <div class="row-actions">
-      <button type="button" data-action="add-below">新增下方</button>
-      <button type="button" data-action="split">拆分当前</button>
-      <button type="button" data-action="merge-next">合并下段</button>
-      <button type="button" data-action="delete">删除本段</button>
+      <button type="button" data-action="add-below">${t("editor_add_below")}</button>
+      <button type="button" data-action="split">${t("editor_split_current")}</button>
+      <button type="button" data-action="merge-next">${t("editor_merge_next")}</button>
+      <button type="button" data-action="delete">${t("editor_delete_segment")}</button>
     </div>
   `;
   return row;

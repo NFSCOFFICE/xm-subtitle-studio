@@ -177,7 +177,7 @@
                 <p class="action-kicker" data-i18n="summary_kicker">任务摘要</p>
                 <div class="action-summary">
                   <span id="summary-preset" class="summary-chip">平衡</span>
-                  <span id="summary-language" class="summary-chip">自动检测</span>
+                  <span id="summary-language" class="summary-chip" data-i18n="runtime_language_auto">自动检测</span>
                   <span id="summary-model" class="summary-chip">large-v3</span>
                   <span id="summary-enhancement" class="summary-chip summary-chip-muted">标准交付</span>
                 </div>
@@ -191,7 +191,7 @@
             <div class="panel-head">
               <div>
                 <p class="panel-label" data-i18n="runtime_label">任务运行</p>
-                <h3 id="job-status-text">运行面板</h3>
+                <h3 id="job-status-text" data-i18n="runtime_title">运行面板</h3>
                 <p class="panel-subline" data-i18n="runtime_subline">这里会保留草稿、已完成历史和下载产物，刷新后自动恢复。</p>
               </div>
               <div class="runtime-actions">
@@ -202,8 +202,8 @@
                   <option value="completed" data-i18n="filter_completed">已完成</option>
                   <option value="failed" data-i18n="filter_failed">失败</option>
                 </select>
-                <button id="poll-toggle-button" type="button" class="secondary-button compact-button">暂停轮询</button>
-                <div id="job-pill" class="status-pill hidden">待命</div>
+                <button id="poll-toggle-button" type="button" class="secondary-button compact-button" data-i18n="poll_pause">暂停轮询</button>
+                <div id="job-pill" class="status-pill hidden" data-i18n="status_idle">待命</div>
               </div>
             </div>
 
@@ -218,7 +218,7 @@
                 </div>
                 <div class="fact">
                   <span data-i18n="runtime_fact_language">默认语言</span>
-                  <strong id="job-language">自动检测</strong>
+                  <strong id="job-language" data-i18n="runtime_language_auto">自动检测</strong>
                 </div>
               </div>
             </div>
