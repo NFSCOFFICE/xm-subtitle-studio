@@ -73,7 +73,8 @@ if errorlevel 1 (
 echo.
 echo XM Subtitle Studio is starting...
 echo Open http://127.0.0.1:8000 if the browser does not open automatically.
+echo LAN sharing is enabled on port 8000. Allow Python through Windows Firewall if prompted.
 echo.
 
 start "" http://127.0.0.1:8000
-python -m uvicorn app:app --host 127.0.0.1 --port 8000
+python -m uvicorn app:app --host 0.0.0.0 --port 8000

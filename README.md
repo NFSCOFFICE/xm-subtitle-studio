@@ -72,7 +72,13 @@ Open:
 http://127.0.0.1:8000
 ```
 
-By default, the app only listens on `127.0.0.1` and is not shared on the local network.
+The source startup scripts listen on `0.0.0.0`, so devices on the same local network can access:
+
+```text
+http://your-local-ip:8000
+```
+
+Allow Python through macOS or Windows Firewall if the system prompts you. The packaged desktop client still binds to `127.0.0.1` only.
 
 ## Desktop App
 
