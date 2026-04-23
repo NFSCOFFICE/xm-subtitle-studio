@@ -1,0 +1,112 @@
+name: Build Desktop Clients
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  macos:
+    name: macOS DMG
+    runs-on: macos-13
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-desktop.txt
+
+      - name: Build app
+        run: pyinstaller --noconfirm desktop_app.spec
+
+      - name: Package DMG and ZIP
+        run: |
+          mkdir -p release
+          if [ -d "dist/XM Subtitle Studio.app" ]; then
+            hdiutil create \
+              -volname "XM Subtitle Studio" \
+              -srcfolder "dist/XM Subtitle Studio.app" \
+              -ov \
+              -format UDZO \
+              "release/XM-Subtitle-Studio-macOS.dmg"
+            ditto -c -k --sequesterRsrc --keepParent \
+              "dist/XM Subtitle Studio.app" \
+              "release/XM-Subtitle-Studio-macOS.zip"
+          else
+            ditto -c -k \
+              "dist/XM Subtitle Studio" \
+              "release/XM-Subtitle-Studio-macOS.zip"
+          fi
+
+      - name: Upload macOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: XM-Subtitle-Studio-macOS
+          path: release/*
+          if-no-files-found: error
+
+  windows:
+    name: Windows ZIP
+    runs-on: windows-2022
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-desktop.txt
+
+      - name: Build app
+        run: pyinstaller --noconfirm desktop_app.spec
+
+      - name: Package ZIP
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force release | Out-Null
+          Compress-Archive -Path "dist\XM Subtitle Studio\*" -DestinationPath "release\XM-Subtitle-Studio-Windows.zip" -Force
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: XM-Subtitle-Studio-Windows
+          path: release/*
+          if-no-files-found: error
+
+  release:
+    name: Publish GitHub Release
+    needs:
+      - macos
+      - windows
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release
+          merge-multiple: true
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/*
+          generate_release_notes: true

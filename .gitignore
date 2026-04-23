@@ -1,4 +1,5 @@
 .venv/
+.venv-desktop/
 __pycache__/
 *.pyc
 uploads/
@@ -7,6 +8,7 @@ models/
 data/jobs.json
 build/
 dist/
+release/
 *.spec.tmp
 .DS_Store
 test.mp4

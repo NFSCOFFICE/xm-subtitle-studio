@@ -57,6 +57,22 @@ http://192.168.1.111:8000
 
 这个项目已经补了桌面封装入口，可打包成 macOS 和 Windows 客户端，用户可以直接下载后双击使用。
 
+### 自动生成下载包
+
+GitHub Actions 已配置跨平台构建：
+
+- 手动运行 `Build Desktop Clients` workflow，可下载 macOS / Windows artifacts
+- 推送 `v*` 标签时会自动创建 GitHub Release
+- macOS 产物：`XM-Subtitle-Studio-macOS.dmg` / `.zip`
+- Windows 产物：`XM-Subtitle-Studio-Windows.zip`
+
+发布新版本示例：
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
 ### macOS 打包
 
 ```bash
@@ -67,7 +83,7 @@ chmod +x build-mac.command
 产物目录：
 
 ```text
-dist/XM Subtitle Studio/
+dist/XM Subtitle Studio.app
 ```
 
 ### Windows 打包

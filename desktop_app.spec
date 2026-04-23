@@ -1,4 +1,5 @@
 # -*- mode: python ; coding: utf-8 -*-
+import sys
 from pathlib import Path
 
 
@@ -52,3 +53,11 @@ coll = COLLECT(
     upx_exclude=[],
     name="XM Subtitle Studio",
 )
+
+if sys.platform == "darwin":
+    app = BUNDLE(
+        coll,
+        name="XM Subtitle Studio.app",
+        icon=None,
+        bundle_identifier="com.xm.subtitle-studio",
+    )
