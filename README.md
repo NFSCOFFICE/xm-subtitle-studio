@@ -28,7 +28,7 @@ XM Subtitle Studio 面向需要稳定交付字幕的人，而不是普通上传�
 | Recognition | Whisper 离线识别、自动语言检测、手动语言选择 |
 | Media | 支持音频和视频导入，视频可进入实时预览 |
 | Timeline | VAD 声音锁定、行内编辑、增删段、合并、拆分、区间播放 |
-| Delivery | SRT、VTT、TXT、JSON、ASS、Markdown、DOCX |
+| Delivery | SRT、VTT、TXT、JSON、ASS、Markdown、DOCX、ZIP 一键保存到 Downloads |
 | Quality Check | 扫描空字幕、时间重叠、过短过长、行长超限、可疑文本 |
 | Enhancement | 双语字幕、说话人标记、断句优化 |
 | Workflow | 批量转写、暂停轮询、任务筛选、ZIP 下载全部产物 |
@@ -51,7 +51,7 @@ git clone https://github.com/NFSCOFFICE/xm-subtitle-studio.git
 cd xm-subtitle-studio
 ```
 
-Run the web app:
+Run the web app on macOS / Linux:
 
 ```bash
 python3 -m pip install -r requirements.txt
@@ -62,10 +62,12 @@ chmod +x run.sh
 Windows one-command start:
 
 ```bat
+git clone https://github.com/NFSCOFFICE/xm-subtitle-studio.git
+cd xm-subtitle-studio
 start-win.bat
 ```
 
-`start-win.bat` creates `.venv`, installs Python dependencies, checks FFmpeg, downloads a local FFmpeg build into `vendor\ffmpeg` when needed, then starts the web app.
+`start-win.bat` creates `.venv`, installs Python dependencies, checks FFmpeg, downloads a local FFmpeg build into `vendor\ffmpeg` when needed, then starts the web app. The first recognition may download the selected Whisper model into `models\`.
 
 Open:
 
@@ -96,6 +98,8 @@ chmod +x build-mac.command
 ./build-mac.command
 ```
 
+The macOS build script installs desktop dependencies, copies local FFmpeg / FFprobe into the app package, downloads `faster-whisper-large-v3` into `models/`, and packages the model with the app.
+
 Output:
 
 ```text
@@ -113,6 +117,8 @@ git clone https://github.com/NFSCOFFICE/xm-subtitle-studio.git
 cd xm-subtitle-studio
 build-win.bat
 ```
+
+The Windows build script installs desktop dependencies, downloads FFmpeg / FFprobe when needed, downloads `faster-whisper-large-v3` into `models\`, and packages the model with the app.
 
 Output:
 
@@ -157,15 +163,24 @@ Current desktop builds use manual updates:
 
 Automatic update checks can be added later through GitHub Releases or a public `version.json` manifest.
 
+## Download Behavior
+
+- In a normal browser, download links keep working through the `/api/jobs/{id}/download/...` endpoints.
+- In the packaged desktop app, download buttons call local save endpoints and copy files directly to the system Downloads folder.
+- ZIP, SRT, VTT, TXT, JSON, ASS, Markdown, DOCX, and bilingual outputs use the original media filename as the export stem.
+- If a file with the same name already exists in Downloads, the app appends `-1`, `-2`, etc. instead of overwriting.
+
 ## Offline Model Notes
 
-- The first run downloads Whisper models into `models/`.
-- On Windows, `start-win.bat` can download FFmpeg into `vendor\ffmpeg` automatically if FFmpeg is not already installed.
+- Source startup scripts download Whisper models into `models/` on first use.
+- Desktop build scripts pre-download `faster-whisper-large-v3` and include it in the packaged app.
+- Windows startup/build scripts can download FFmpeg into `vendor\ffmpeg` automatically if FFmpeg is not already installed.
 - After models are downloaded, recognition can run offline.
 - Translation and speaker features may download additional local models on first use.
 - `large-v3` gives better accuracy, but first download and transcription are slower.
 - Use a smaller model in the UI if speed matters more than accuracy.
-- To protect the first words, transcription adds a temporary 1s lead-in silence and subtracts it from generated subtitle timecodes. Exports stay aligned to the original media.
+- To protect first words, transcription adds a temporary `0.35s` lead-in silence and subtracts it from generated subtitle timecodes. Exports stay aligned to the original media.
+- After Whisper returns timestamps, a VAD / waveform pass locks subtitle boundaries back to detected speech ranges so subtitles are less likely to appear over silence.
 
 ## Project Structure
 
@@ -177,6 +192,8 @@ Automatic update checks can be added later through GitHub Releases or a public `
 ├── desktop_app.spec        # PyInstaller configuration
 ├── build-mac.command       # macOS desktop build script
 ├── build-win.bat           # Windows desktop build script
+├── start-win.bat           # Windows one-command web startup script
+├── scripts/                # Build helpers, including model preparation
 ├── requirements.txt        # Runtime dependencies
 ├── requirements-desktop.txt
 ├── uploads/                # Local imported media, ignored by git
