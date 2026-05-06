@@ -1,13 +1,15 @@
 from __future__ import annotations
 
+import fcntl
+import multiprocessing
+import os
 import socket
 import threading
 import time
+from pathlib import Path
 
 import uvicorn
 import webview
-
-from app import app
 
 
 def find_free_port() -> int:
@@ -17,7 +19,22 @@ def find_free_port() -> int:
         return int(sock.getsockname()[1])
 
 
+def acquire_single_instance_lock():
+    lock_dir = Path.home() / "Library" / "Application Support" / "XM Subtitle Studio"
+    lock_dir.mkdir(parents=True, exist_ok=True)
+    lock_file = (lock_dir / "app.lock").open("w")
+    try:
+        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        return None
+    lock_file.write(str(os.getpid()))
+    lock_file.flush()
+    return lock_file
+
+
 def run_server(port: int) -> None:
+    from app import app
+
     config = uvicorn.Config(
         app,
         host="127.0.0.1",
@@ -41,6 +58,10 @@ def wait_for_server(port: int, timeout: float = 15.0) -> None:
 
 
 def main() -> None:
+    lock_file = acquire_single_instance_lock()
+    if lock_file is None:
+        return
+
     port = find_free_port()
     thread = threading.Thread(target=run_server, args=(port,), daemon=True)
     thread.start()
@@ -53,7 +74,9 @@ def main() -> None:
         text_select=True,
     )
     webview.start()
+    lock_file.close()
 
 
 if __name__ == "__main__":
+    multiprocessing.freeze_support()
     main()

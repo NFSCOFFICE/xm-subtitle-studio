@@ -18,6 +18,7 @@ from threading import Lock
 from typing import Dict, List, Optional
 
 import numpy as np
+import librosa
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
@@ -40,10 +41,13 @@ else:
 STATIC_DIR = RESOURCE_DIR / "static"
 UPLOAD_DIR = APP_DIR / "uploads"
 OUTPUT_DIR = APP_DIR / "outputs"
-MODEL_DIR = APP_DIR / "models"
+MODEL_DIR = RESOURCE_DIR / "models" if (RESOURCE_DIR / "models").exists() else APP_DIR / "models"
 DATA_DIR = APP_DIR / "data"
 JOB_STORE_PATH = DATA_DIR / "jobs.json"
-VENDOR_FFMPEG_BIN = APP_DIR / "vendor" / "ffmpeg" / "bin"
+VENDOR_FFMPEG_BIN_CANDIDATES = (
+    APP_DIR / "vendor" / "ffmpeg" / "bin",
+    APP_DIR.parent / "Frameworks" / "vendor" / "ffmpeg" / "bin",
+)
 ALLOWED_SUFFIXES = {
     ".mp3",
     ".wav",
@@ -64,11 +68,24 @@ SUPPORTED_MEDIA_LABEL = ", ".join(sorted(suffix.lstrip(".") for suffix in ALLOWE
 for directory in (STATIC_DIR, UPLOAD_DIR, OUTPUT_DIR, MODEL_DIR, DATA_DIR):
     directory.mkdir(parents=True, exist_ok=True)
 
-if VENDOR_FFMPEG_BIN.exists():
-    os_path = str(VENDOR_FFMPEG_BIN)
+
+def prepend_path_if_exists(path: Path) -> None:
+    if not path.exists():
+        return
+    path_str = str(path)
     path_parts = os.environ.get("PATH", "").split(os.pathsep)
-    if os_path not in path_parts:
-        os.environ["PATH"] = os_path + os.pathsep + os.environ.get("PATH", "")
+    if path_str not in path_parts:
+        os.environ["PATH"] = path_str + os.pathsep + os.environ.get("PATH", "")
+
+
+for vendor_bin in VENDOR_FFMPEG_BIN_CANDIDATES:
+    prepend_path_if_exists(vendor_bin)
+for fallback_bin in (
+    Path("/opt/homebrew/bin"),
+    Path("/usr/local/bin"),
+    Path("/opt/local/bin"),
+):
+    prepend_path_if_exists(fallback_bin)
 
 
 @dataclass
@@ -128,13 +145,37 @@ TRANSLATION_MODELS = {
     ("it", "en"): "Helsinki-NLP/opus-mt-it-en",
 }
 PUNCTUATION_SPLIT_RE = re.compile(r"(?<=[。！？!?；;：:,，])\s*")
-TRANSCRIPTION_LEAD_SILENCE_SECONDS = 1.0
+TRANSCRIPTION_LEAD_SILENCE_SECONDS = 0.35
+SUBTITLE_START_DELAY_SECONDS = 0.03
+STRONG_ALIGNMENT_WINDOW_SECONDS = 1.2
+STRONG_ALIGNMENT_MIN_SEGMENT_SECONDS = 0.16
+BOUNDARY_ALIGNMENT_MAX_WINDOW_SECONDS = 8.0
+BOUNDARY_START_HARD_LIMIT_SECONDS = 0.45
+BOUNDARY_END_PAD_SECONDS = 0.05
+SPEECH_LOCK_LOOKAROUND_SECONDS = 0.75
+SPEECH_LOCK_START_PAD_SECONDS = 0.015
+SPEECH_LOCK_END_PAD_SECONDS = 0.08
+SPEECH_LOCK_MIN_ACTIVE_SECONDS = 0.12
+SPEECH_LOCK_MERGE_GAP_SECONDS = 0.28
+SPEECH_LOCK_GROUP_GAP_SECONDS = 1.15
+SPEECH_LOCK_FRAME_SECONDS = 0.025
+SPEECH_LOCK_HOP_SECONDS = 0.01
+SHORT_SEGMENT_WORD_LIMIT = 3
+SHORT_SEGMENT_MAX_DURATION_SECONDS = 2.2
+SHORT_SEGMENT_BASE_BUFFER_SECONDS = 0.9
+SHORT_SEGMENT_CHAR_RATE = 6.5
+AUTO_LANGUAGE_PROBE_SECONDS = 45
+AUTO_LANGUAGE_MIN_CONFIDENCE = 0.65
 WHISPER_VAD_PARAMETERS = {
-    "threshold": 0.35,
+    "threshold": 0.4,
     "min_speech_duration_ms": 120,
-    "min_silence_duration_ms": 600,
-    "speech_pad_ms": 600,
+    "min_silence_duration_ms": 450,
+    "speech_pad_ms": 120,
 }
+SPLIT_SEGMENT_MIN_SECONDS = 0.2
+SPLIT_SEGMENT_GAP_SECONDS = 0.06
+TIMELINE_MIN_SEGMENT_SECONDS = 0.2
+TIMELINE_MIN_GAP_SECONDS = 0.08
 
 
 def serialize_job(job: JobState) -> Dict[str, object]:
@@ -149,6 +190,11 @@ def serialize_job(job: JobState) -> Dict[str, object]:
             format_name: f"/api/jobs/{job.job_id}/download/{format_name}"
             for format_name in job.outputs
         }
+        data["save_urls"] = {
+            format_name: f"/api/jobs/{job.job_id}/save/{format_name}"
+            for format_name in job.outputs
+        }
+        data["save_all_url"] = f"/api/jobs/{job.job_id}/save-all"
         if "srt" in job.outputs:
             data["download_url"] = data["download_urls"]["srt"]
     return data
@@ -211,21 +257,26 @@ def utc_now() -> str:
 
 
 def get_audio_duration(file_path: Path) -> float:
-    result = subprocess.run(
-        [
-            "ffprobe",
-            "-v",
-            "error",
-            "-show_entries",
-            "format=duration",
-            "-of",
-            "json",
-            str(file_path),
-        ],
-        check=True,
-        capture_output=True,
-        text=True,
-    )
+    try:
+        result = subprocess.run(
+            [
+                "ffprobe",
+                "-v",
+                "error",
+                "-show_entries",
+                "format=duration",
+                "-of",
+                "json",
+                str(file_path),
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except FileNotFoundError as exc:
+        raise RuntimeError(
+            "ffprobe is required but was not found. Please install FFmpeg or place ffprobe under vendor/ffmpeg/bin."
+        ) from exc
     payload = json.loads(result.stdout or "{}")
     duration = payload.get("format", {}).get("duration", 0)
     return float(duration or 0)
@@ -296,6 +347,41 @@ def sanitize_segments(segments: List[dict]) -> List[dict]:
     return cleaned
 
 
+def normalize_timeline(segments: List[dict]) -> List[dict]:
+    cleaned = sanitize_segments(segments)
+    if not cleaned:
+        return []
+
+    normalized = [dict(item) for item in sorted(cleaned, key=lambda item: (item["start"], item["end"]))]
+    for item in normalized:
+        start = max(0.0, float(item["start"]))
+        end = max(start + TIMELINE_MIN_SEGMENT_SECONDS, float(item["end"]))
+        item["start"] = start
+        item["end"] = end
+
+    for index in range(1, len(normalized)):
+        previous = normalized[index - 1]
+        current = normalized[index]
+        required_previous_end = float(current["start"]) - TIMELINE_MIN_GAP_SECONDS
+        previous_min_end = float(previous["start"]) + TIMELINE_MIN_SEGMENT_SECONDS
+        if float(previous["end"]) > required_previous_end:
+            previous["end"] = max(previous_min_end, required_previous_end)
+
+        required_current_start = float(previous["end"]) + TIMELINE_MIN_GAP_SECONDS
+        if float(current["start"]) < required_current_start:
+            current["start"] = required_current_start
+            current["end"] = max(
+                float(current["end"]),
+                float(current["start"]) + TIMELINE_MIN_SEGMENT_SECONDS,
+            )
+
+    for item in normalized:
+        item["start"] = round(float(item["start"]), 3)
+        item["end"] = round(max(float(item["start"]) + 0.001, float(item["end"])), 3)
+
+    return normalized
+
+
 def shift_segments(segments: List[dict], offset_seconds: float) -> List[dict]:
     if not offset_seconds:
         return segments
@@ -306,6 +392,304 @@ def shift_segments(segments: List[dict], offset_seconds: float) -> List[dict]:
         item["end"] = max(item["start"], float(item.get("end", 0)) - offset_seconds)
         shifted.append(item)
     return shifted
+
+
+def delay_segment_starts(segments: List[dict], delay_seconds: float) -> List[dict]:
+    if delay_seconds <= 0:
+        return segments
+
+    delayed: List[dict] = []
+    for segment in segments:
+        item = dict(segment)
+        start = float(item.get("start", 0))
+        end = float(item.get("end", 0))
+        duration = max(0.0, end - start)
+        applied_delay = min(delay_seconds, duration * 0.35)
+        item["start"] = max(0.0, round(start + applied_delay, 3))
+        item["end"] = max(item["start"], end)
+        delayed.append(item)
+    return delayed
+
+
+def align_segment_boundaries_to_audio(segments: List[dict], audio_path: Path) -> List[dict]:
+    if not segments:
+        return segments
+
+    try:
+        waveform, sample_rate = librosa.load(str(audio_path), sr=16000, mono=True)
+    except Exception:
+        return segments
+
+    if waveform.size == 0:
+        return segments
+
+    frame_length = max(1, int(sample_rate * 0.02))
+    hop_length = max(1, int(sample_rate * 0.01))
+    aligned_segments: List[dict] = []
+
+    for segment in segments:
+        item = dict(segment)
+        start = float(item.get("start", 0.0))
+        end = float(item.get("end", 0.0))
+        duration = max(0.0, end - start)
+        if duration < STRONG_ALIGNMENT_MIN_SEGMENT_SECONDS:
+            aligned_segments.append(item)
+            continue
+
+        search_start = max(0.0, start)
+        search_end = min(end, start + BOUNDARY_ALIGNMENT_MAX_WINDOW_SECONDS)
+        if search_end - search_start < 0.04:
+            aligned_segments.append(item)
+            continue
+
+        start_sample = int(search_start * sample_rate)
+        end_sample = int(search_end * sample_rate)
+        audio_slice = waveform[start_sample:end_sample]
+        if audio_slice.size < frame_length:
+            aligned_segments.append(item)
+            continue
+
+        rms = librosa.feature.rms(
+            y=audio_slice,
+            frame_length=frame_length,
+            hop_length=hop_length,
+            center=False,
+        )[0]
+        if rms.size == 0:
+            aligned_segments.append(item)
+            continue
+
+        smoothed_rms = np.convolve(rms, np.ones(3, dtype=np.float32) / 3, mode="same")
+        peak = float(np.percentile(smoothed_rms, 95))
+        floor = float(np.percentile(smoothed_rms, 25))
+        if peak <= 1e-4 or peak <= floor:
+            aligned_segments.append(item)
+            continue
+
+        threshold = max(floor * 2.6, floor + (peak - floor) * 0.48, 0.006)
+        active_frames = np.flatnonzero(smoothed_rms >= threshold)
+        if active_frames.size == 0:
+            aligned_segments.append(item)
+            continue
+
+        first_active = int(active_frames[0])
+        last_active = int(active_frames[-1])
+
+        detected_start = search_start + (first_active * hop_length) / sample_rate
+        detected_end = search_start + ((last_active * hop_length) + frame_length) / sample_rate
+        bounded_start = min(max(start, detected_start), start + BOUNDARY_START_HARD_LIMIT_SECONDS)
+        bounded_end = max(bounded_start + 0.04, min(end, detected_end + BOUNDARY_END_PAD_SECONDS))
+
+        if bounded_start > start:
+            item["start"] = round(bounded_start, 3)
+        if bounded_end < end:
+            item["end"] = round(bounded_end, 3)
+
+        aligned_segments.append(item)
+
+    return aligned_segments
+
+
+def detect_speech_ranges(audio_path: Path) -> List[tuple[float, float]]:
+    """Detect coarse speech/audio-active islands used to prevent subtitles over silence."""
+    try:
+        waveform, sample_rate = librosa.load(str(audio_path), sr=16000, mono=True)
+    except Exception:
+        return []
+
+    if waveform.size == 0:
+        return []
+
+    frame_length = max(1, int(sample_rate * SPEECH_LOCK_FRAME_SECONDS))
+    hop_length = max(1, int(sample_rate * SPEECH_LOCK_HOP_SECONDS))
+    rms = librosa.feature.rms(
+        y=waveform,
+        frame_length=frame_length,
+        hop_length=hop_length,
+        center=False,
+    )[0]
+    if rms.size == 0:
+        return []
+
+    smoothed = np.convolve(rms, np.ones(5, dtype=np.float32) / 5, mode="same")
+    floor = float(np.percentile(smoothed, 20))
+    body = float(np.percentile(smoothed, 75))
+    peak = float(np.percentile(smoothed, 96))
+    if peak <= 1e-5:
+        return []
+
+    threshold = max(0.0045, floor * 2.4, floor + (body - floor) * 0.7, peak * 0.10)
+    active_frames = np.flatnonzero(smoothed >= threshold)
+    if active_frames.size == 0:
+        return []
+
+    ranges: List[tuple[float, float]] = []
+    range_start = int(active_frames[0])
+    previous_frame = int(active_frames[0])
+    max_gap_frames = max(1, int(SPEECH_LOCK_MERGE_GAP_SECONDS / SPEECH_LOCK_HOP_SECONDS))
+
+    for frame in active_frames[1:]:
+        frame_index = int(frame)
+        if frame_index - previous_frame > max_gap_frames:
+            start_time = range_start * hop_length / sample_rate
+            end_time = (previous_frame * hop_length + frame_length) / sample_rate
+            if end_time - start_time >= SPEECH_LOCK_MIN_ACTIVE_SECONDS:
+                ranges.append((start_time, end_time))
+            range_start = frame_index
+        previous_frame = frame_index
+
+    start_time = range_start * hop_length / sample_rate
+    end_time = (previous_frame * hop_length + frame_length) / sample_rate
+    if end_time - start_time >= SPEECH_LOCK_MIN_ACTIVE_SECONDS:
+        ranges.append((start_time, end_time))
+
+    return ranges
+
+
+def lock_segments_to_speech_ranges(segments: List[dict], audio_path: Path) -> List[dict]:
+    speech_ranges = detect_speech_ranges(audio_path)
+    if not segments or not speech_ranges:
+        return segments
+
+    locked_segments: List[dict] = []
+    for segment in segments:
+        item = dict(segment)
+        start = float(item.get("start", 0.0))
+        end = float(item.get("end", start))
+        if end <= start:
+            locked_segments.append(item)
+            continue
+
+        search_start = max(0.0, start - SPEECH_LOCK_LOOKAROUND_SECONDS)
+        search_end = end + SPEECH_LOCK_LOOKAROUND_SECONDS
+        matches = [
+            (speech_start, speech_end)
+            for speech_start, speech_end in speech_ranges
+            if speech_end >= search_start and speech_start <= search_end
+        ]
+        if not matches:
+            locked_segments.append(item)
+            continue
+
+        groups: List[List[tuple[float, float]]] = []
+        for speech_range in matches:
+            if groups and speech_range[0] - groups[-1][-1][1] <= SPEECH_LOCK_GROUP_GAP_SECONDS:
+                groups[-1].append(speech_range)
+            else:
+                groups.append([speech_range])
+
+        def group_score(group: List[tuple[float, float]]) -> float:
+            active_duration = sum(
+                max(0.0, min(end, speech_end) - max(start, speech_start))
+                for speech_start, speech_end in group
+            )
+            group_start = group[0][0]
+            group_end = group[-1][1]
+            distance_penalty = min(abs(group_start - start), abs(group_end - end)) * 0.08
+            return active_duration - distance_penalty
+
+        best_group = max(groups, key=group_score)
+        active_start = best_group[0][0]
+        active_end = best_group[-1][1]
+
+        next_start = max(start, active_start - SPEECH_LOCK_START_PAD_SECONDS)
+        next_end = min(end, active_end + SPEECH_LOCK_END_PAD_SECONDS)
+
+        if next_end - next_start < TIMELINE_MIN_SEGMENT_SECONDS:
+            nearest = max(
+                matches,
+                key=lambda item_range: min(abs(item_range[0] - start), abs(item_range[1] - end)),
+            )
+            next_start = max(start, nearest[0] - SPEECH_LOCK_START_PAD_SECONDS)
+            next_end = min(end, nearest[1] + SPEECH_LOCK_END_PAD_SECONDS)
+
+        if next_end - next_start >= TIMELINE_MIN_SEGMENT_SECONDS:
+            item["start"] = round(next_start, 3)
+            item["end"] = round(next_end, 3)
+
+        locked_segments.append(item)
+
+    return locked_segments
+
+
+def resolve_segment_start(segment: object) -> float:
+    base_start = float(getattr(segment, "start", 0.0) or 0.0)
+    words = list(getattr(segment, "words", None) or [])
+    if not words:
+        return base_start
+
+    fallback_start: Optional[float] = None
+    for word in words:
+        word_start = getattr(word, "start", None)
+        if word_start is None:
+            continue
+        candidate_start = float(word_start)
+        if fallback_start is None:
+            fallback_start = candidate_start
+        token = str(getattr(word, "word", "") or "").strip()
+        if any(char.isalnum() for char in token):
+            return max(base_start, candidate_start)
+
+    return max(base_start, fallback_start if fallback_start is not None else base_start)
+
+
+def resolve_segment_end(segment: object, resolved_start: float) -> float:
+    base_end = float(getattr(segment, "end", resolved_start) or resolved_start)
+    words = list(getattr(segment, "words", None) or [])
+    if not words:
+        return max(base_end, resolved_start + 0.04)
+
+    fallback_end: Optional[float] = None
+    for word in reversed(words):
+        word_end = getattr(word, "end", None)
+        if word_end is None:
+            continue
+        candidate_end = float(word_end)
+        if fallback_end is None:
+            fallback_end = candidate_end
+        token = str(getattr(word, "word", "") or "").strip()
+        if any(char.isalnum() for char in token):
+            return max(resolved_start + 0.04, min(base_end, candidate_end))
+
+    if fallback_end is not None:
+        return max(resolved_start + 0.04, min(base_end, fallback_end))
+    return max(base_end, resolved_start + 0.04)
+
+
+def tighten_sparse_long_segments(segments: List[dict]) -> List[dict]:
+    if not segments:
+        return segments
+
+    tightened: List[dict] = [dict(item) for item in segments]
+    for index, segment in enumerate(tightened):
+        if index + 1 >= len(tightened):
+            continue
+
+        start = float(segment.get("start", 0.0))
+        end = float(segment.get("end", 0.0))
+        duration = max(0.0, end - start)
+        if duration <= SHORT_SEGMENT_MAX_DURATION_SECONDS:
+            continue
+
+        text = str(segment.get("text", "")).strip()
+        tokens = [token for token in re.split(r"\s+", text) if token]
+        if len(tokens) == 0 or len(tokens) > SHORT_SEGMENT_WORD_LIMIT:
+            continue
+
+        char_count = len(re.sub(r"\s+", "", text))
+        predicted_max = SHORT_SEGMENT_BASE_BUFFER_SECONDS + (char_count / SHORT_SEGMENT_CHAR_RATE)
+        predicted_max = max(1.2, min(predicted_max, SHORT_SEGMENT_MAX_DURATION_SECONDS))
+        if duration <= predicted_max + 0.15:
+            continue
+
+        capped_end = start + predicted_max
+        next_start = float(tightened[index + 1].get("start", capped_end))
+        capped_end = min(capped_end, next_start - 0.05)
+
+        if capped_end - start >= TIMELINE_MIN_SEGMENT_SECONDS:
+            segment["end"] = round(capped_end, 3)
+
+    return tightened
 
 
 def split_text_for_subtitles(text: str, max_chars: int = 26) -> List[str]:
@@ -353,25 +737,34 @@ def optimize_subtitle_segments(segments: List[dict]) -> List[dict]:
             optimized.append(segment)
             continue
 
-        duration = max(0.2, segment["end"] - segment["start"])
+        duration = max(SPLIT_SEGMENT_MIN_SECONDS, segment["end"] - segment["start"])
         total_chars = sum(max(1, len(part)) for part in parts)
         cursor = segment["start"]
+        total_gap = SPLIT_SEGMENT_GAP_SECONDS * max(0, len(parts) - 1)
+        distributable_duration = max(
+            SPLIT_SEGMENT_MIN_SECONDS * len(parts),
+            duration - total_gap,
+        )
 
         for index, part in enumerate(parts):
             weight = max(1, len(part)) / total_chars
-            piece_duration = duration * weight
-            end = segment["end"] if index == len(parts) - 1 else min(segment["end"], cursor + piece_duration)
+            piece_duration = distributable_duration * weight
+            end = (
+                segment["end"]
+                if index == len(parts) - 1
+                else min(segment["end"], cursor + piece_duration)
+            )
             item = {
                 "start": round(cursor, 3),
-                "end": round(max(cursor + 0.2, end), 3),
+                "end": round(max(cursor + SPLIT_SEGMENT_MIN_SECONDS, end), 3),
                 "text": part,
             }
             if segment.get("speaker"):
                 item["speaker"] = segment["speaker"]
             optimized.append(item)
-            cursor = item["end"]
+            cursor = min(segment["end"], item["end"] + SPLIT_SEGMENT_GAP_SECONDS)
 
-    return sanitize_segments(optimized)
+    return normalize_timeline(optimized)
 
 
 def render_segment_text(segment: dict, bilingual: bool = False) -> str:
@@ -394,7 +787,7 @@ def write_srt(segments: List[dict], output_path: Path, bilingual: bool = False) 
         )
         lines.append(render_segment_text(segment, bilingual=bilingual))
         lines.append("")
-    output_path.write_text("\n".join(lines), encoding="utf-8")
+    output_path.write_text("\r\n".join(lines), encoding="utf-8")
 
 
 def write_vtt(segments: List[dict], output_path: Path, bilingual: bool = False) -> None:
@@ -405,7 +798,7 @@ def write_vtt(segments: List[dict], output_path: Path, bilingual: bool = False) 
         )
         lines.append(render_segment_text(segment, bilingual=bilingual))
         lines.append("")
-    output_path.write_text("\n".join(lines), encoding="utf-8")
+    output_path.write_text("\r\n".join(lines), encoding="utf-8")
 
 
 def write_txt(segments: List[dict], output_path: Path, bilingual: bool = False) -> None:
@@ -471,13 +864,8 @@ def format_ass_timestamp(seconds: float) -> str:
     return f"{hours}:{minutes:02}:{secs:02}.{centis:02}"
 
 
-def ass_style_block(style_name: str) -> str:
-    styles = {
-        "variety": "Style: Main,Microsoft YaHei,26,&H00FFFFFF,&H0000E6FF,&H0010182A,&H8010182A,-1,0,0,0,100,100,0,0,1,3,0,2,28,28,24,1",
-        "punch": "Style: Main,Arial Black,30,&H00FFFFFF,&H0000A5FF,&H00000000,&H64000000,-1,0,0,0,108,100,0,0,1,4,2,2,28,28,26,1",
-        "neon": "Style: Main,Avenir Next,28,&H00F8FEFF,&H00FF8A3D,&H0006121D,&H6406121D,-1,0,0,0,100,100,0,0,1,2.5,0,2,28,28,22,1",
-    }
-    return styles.get(style_name, styles["variety"])
+def ass_style_block(_style_name: str) -> str:
+    return "Style: Main,Arial,24,&H00FFFFFF,&H000000FF,&H0010182A,&H8010182A,0,0,0,0,100,100,0,0,1,2,0,2,24,24,18,1"
 
 
 def write_ass_subtitles(
@@ -519,6 +907,51 @@ def load_model(model_size: str) -> WhisperModel:
                 download_root=str(MODEL_DIR),
             )
         return _model_cache[model_size]
+
+
+def probe_auto_language(model: WhisperModel, audio_path: Path) -> tuple[Optional[str], Optional[float]]:
+    temp_dir = Path(tempfile.mkdtemp(prefix="subtitle-lang-probe-"))
+    probe_path = temp_dir / "lang-probe.wav"
+    try:
+        subprocess.run(
+            [
+                "ffmpeg",
+                "-y",
+                "-i",
+                str(audio_path),
+                "-t",
+                str(AUTO_LANGUAGE_PROBE_SECONDS),
+                "-ac",
+                "1",
+                "-ar",
+                "16000",
+                str(probe_path),
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        _segments, info = model.transcribe(
+            str(probe_path),
+            language=None,
+            vad_filter=True,
+            vad_parameters=WHISPER_VAD_PARAMETERS,
+            beam_size=1,
+            language_detection_segments=3,
+            word_timestamps=False,
+        )
+        language = getattr(info, "language", None)
+        probability = getattr(info, "language_probability", None)
+        if probability is not None:
+            try:
+                probability = float(probability)
+            except (TypeError, ValueError):
+                probability = None
+        return language, probability
+    except Exception:
+        return None, None
+    finally:
+        shutil.rmtree(temp_dir, ignore_errors=True)
 
 
 def load_speaker_encoder() -> VoiceEncoder:
@@ -672,26 +1105,58 @@ def reserve_output_paths(original_name: str) -> Dict[str, Path]:
         counter += 1
 
 
-def write_all_outputs(segments: List[dict], output_paths: Dict[str, Path], ass_style: str) -> None:
-    write_srt(segments, output_paths["srt"])
-    write_vtt(segments, output_paths["vtt"])
-    write_txt(segments, output_paths["txt"])
-    write_json_transcript(segments, output_paths["json"])
-    write_markdown_transcript(segments, output_paths["md"])
-    write_docx_transcript(segments, output_paths["docx"])
-    write_ass_subtitles(segments, output_paths["ass"], ass_style)
-    if any(segment.get("translation") for segment in segments):
-        write_srt(segments, output_paths["srt_bilingual"], bilingual=True)
-        write_vtt(segments, output_paths["vtt_bilingual"], bilingual=True)
-        write_txt(segments, output_paths["txt_bilingual"], bilingual=True)
-        write_json_transcript(segments, output_paths["json_bilingual"], bilingual=True)
-        write_markdown_transcript(segments, output_paths["md_bilingual"], bilingual=True)
-        write_docx_transcript(segments, output_paths["docx_bilingual"], bilingual=True)
-        write_ass_subtitles(segments, output_paths["ass_bilingual"], ass_style, bilingual=True)
+def write_all_outputs(segments: List[dict], output_paths: Dict[str, Path], ass_style: str) -> List[dict]:
+    normalized_segments = normalize_timeline(segments)
+    write_srt(normalized_segments, output_paths["srt"])
+    write_vtt(normalized_segments, output_paths["vtt"])
+    write_txt(normalized_segments, output_paths["txt"])
+    write_json_transcript(normalized_segments, output_paths["json"])
+    write_markdown_transcript(normalized_segments, output_paths["md"])
+    write_docx_transcript(normalized_segments, output_paths["docx"])
+    write_ass_subtitles(normalized_segments, output_paths["ass"], ass_style)
+    if any(segment.get("translation") for segment in normalized_segments):
+        write_srt(normalized_segments, output_paths["srt_bilingual"], bilingual=True)
+        write_vtt(normalized_segments, output_paths["vtt_bilingual"], bilingual=True)
+        write_txt(normalized_segments, output_paths["txt_bilingual"], bilingual=True)
+        write_json_transcript(normalized_segments, output_paths["json_bilingual"], bilingual=True)
+        write_markdown_transcript(normalized_segments, output_paths["md_bilingual"], bilingual=True)
+        write_docx_transcript(normalized_segments, output_paths["docx_bilingual"], bilingual=True)
+        write_ass_subtitles(normalized_segments, output_paths["ass_bilingual"], ass_style, bilingual=True)
+    return normalized_segments
 
 
 def existing_output_map(output_paths: Dict[str, Path]) -> Dict[str, str]:
     return {name: str(path) for name, path in output_paths.items() if path.exists()}
+
+
+def user_downloads_dir() -> Path:
+    downloads = Path.home() / "Downloads"
+    downloads.mkdir(parents=True, exist_ok=True)
+    return downloads
+
+
+def unique_destination_path(directory: Path, filename: str) -> Path:
+    safe_name = re.sub(r'[<>:"/\\|?*\x00-\x1f]+', "-", filename).strip(" .") or "download"
+    candidate = directory / safe_name
+    if not candidate.exists():
+        return candidate
+
+    stem = candidate.stem
+    suffix = candidate.suffix
+    counter = 1
+    while True:
+        numbered = directory / f"{stem}-{counter}{suffix}"
+        if not numbered.exists():
+            return numbered
+        counter += 1
+
+
+def copy_to_downloads(source_path: Path) -> Path:
+    if not source_path.exists():
+        raise HTTPException(status_code=404, detail="File not found.")
+    destination = unique_destination_path(user_downloads_dir(), source_path.name)
+    shutil.copy2(source_path, destination)
+    return destination
 
 
 def build_bundle_zip(job: JobState) -> Path:
@@ -728,6 +1193,15 @@ def transcribe_job(
         total_duration = get_audio_duration(audio_path)
         transcription_audio_path, lead_offset, transcription_temp_dir = prepare_audio_for_transcription(audio_path)
         task_language = None if language == "auto" else language
+        detected_language: Optional[str] = None
+        if language == "auto":
+            update_job(job_id, progress=0.11, message="Detecting language")
+            probed_language, probed_confidence = probe_auto_language(model, transcription_audio_path)
+            if probed_language and (
+                probed_confidence is None or probed_confidence >= AUTO_LANGUAGE_MIN_CONFIDENCE
+            ):
+                task_language = probed_language
+                detected_language = probed_language
 
         update_job(job_id, progress=0.15, message="Running offline transcription")
         segments_iter, info = model.transcribe(
@@ -737,11 +1211,11 @@ def transcribe_job(
             vad_parameters=WHISPER_VAD_PARAMETERS,
             beam_size=5,
             language_detection_segments=3,
-            word_timestamps=False,
+            word_timestamps=True,
         )
 
         segments: List[dict] = []
-        detected_language = getattr(info, "language", None)
+        detected_language = getattr(info, "language", None) or detected_language
         update_job(
             job_id,
             detected_language=detected_language,
@@ -749,9 +1223,11 @@ def transcribe_job(
         )
 
         for segment in segments_iter:
+            resolved_start = resolve_segment_start(segment)
+            resolved_end = resolve_segment_end(segment, resolved_start)
             item = {
-                "start": float(segment.start),
-                "end": float(segment.end),
+                "start": resolved_start,
+                "end": resolved_end,
                 "text": segment.text.strip(),
             }
             if item["text"]:
@@ -763,13 +1239,18 @@ def transcribe_job(
         if not segments:
             raise RuntimeError("No speech was detected in the uploaded audio.")
 
-        segments = sanitize_segments(shift_segments(segments, lead_offset))
+        segments = shift_segments(segments, lead_offset)
+        segments = align_segment_boundaries_to_audio(segments, audio_path)
+        segments = lock_segments_to_speech_ranges(segments, audio_path)
+        segments = sanitize_segments(delay_segment_starts(segments, SUBTITLE_START_DELAY_SECONDS))
+        segments = tighten_sparse_long_segments(segments)
         if smart_split:
             update_job(job_id, progress=0.78, message="Optimizing subtitle breaks")
             segments = optimize_subtitle_segments(segments)
         if diarization:
             update_job(job_id, progress=0.82, message="Detecting speakers")
             segments = apply_speaker_diarization(segments, audio_path, speaker_count)
+        segments = normalize_timeline(segments)
         source_language = detected_language or (language if language != "auto" else "")
         update_job(job_id, progress=0.9, message="Preparing exports")
         translated_segments = translate_segments(segments, source_language, translate_to)
@@ -778,7 +1259,7 @@ def transcribe_job(
             output_paths = reserve_output_paths(job.original_name)
 
         update_job(job_id, progress=0.97, message="Writing subtitle files")
-        write_all_outputs(translated_segments, output_paths, ass_style)
+        translated_segments = write_all_outputs(translated_segments, output_paths, ass_style)
 
         update_job(
             job_id,
@@ -806,6 +1287,11 @@ def index() -> FileResponse:
     return FileResponse(STATIC_DIR / "index.html")
 
 
+@app.get("/favicon.ico")
+def favicon() -> FileResponse:
+    return FileResponse(STATIC_DIR / "favicon.svg", media_type="image/svg+xml")
+
+
 @app.get("/api/jobs")
 def list_jobs() -> List[Dict[str, object]]:
     with jobs_lock:
@@ -828,7 +1314,7 @@ async def create_job(
     diarization: bool = Form(False),
     speaker_count: str = Form("2"),
     smart_split: bool = Form(True),
-    ass_style: str = Form("variety"),
+    ass_style: str = Form("standard"),
 ) -> Dict[str, object]:
     suffix = Path(file.filename or "").suffix.lower()
     if suffix not in ALLOWED_SUFFIXES:
@@ -921,8 +1407,9 @@ def update_segments(job_id: str, payload: Dict[str, List[dict]]) -> Dict[str, ob
         ass_style = job.ass_style
         output_paths = {name: Path(path) for name, path in job.outputs.items()}
 
+    cleaned_segments = normalize_timeline(cleaned_segments)
     translated_segments = translate_segments(cleaned_segments, source_language, translate_to)
-    write_all_outputs(translated_segments, output_paths, ass_style)
+    translated_segments = write_all_outputs(translated_segments, output_paths, ass_style)
     update_job(
         job_id,
         segments=translated_segments,
@@ -1002,6 +1489,25 @@ def download_output(job_id: str, format_name: str) -> FileResponse:
     )
 
 
+@app.post("/api/jobs/{job_id}/save/{format_name}")
+def save_output_to_downloads(job_id: str, format_name: str) -> Dict[str, str]:
+    with jobs_lock:
+        job = jobs.get(job_id)
+        if not job or not job.outputs:
+            raise HTTPException(status_code=404, detail="Subtitle file not found.")
+        if format_name not in job.outputs:
+            raise HTTPException(status_code=404, detail="Requested format not found.")
+        output_path = Path(job.outputs[format_name])
+
+    destination = copy_to_downloads(output_path)
+    return {
+        "ok": "true",
+        "path": str(destination),
+        "filename": destination.name,
+        "directory": str(destination.parent),
+    }
+
+
 @app.get("/api/jobs/{job_id}/download-all")
 def download_bundle(job_id: str) -> FileResponse:
     with jobs_lock:
@@ -1015,3 +1521,20 @@ def download_bundle(job_id: str) -> FileResponse:
         media_type="application/zip",
         filename=bundle_path.name,
     )
+
+
+@app.post("/api/jobs/{job_id}/save-all")
+def save_bundle_to_downloads(job_id: str) -> Dict[str, str]:
+    with jobs_lock:
+        job = jobs.get(job_id)
+        if not job or not job.outputs:
+            raise HTTPException(status_code=404, detail="Subtitle bundle not found.")
+        bundle_path = build_bundle_zip(job)
+
+    destination = copy_to_downloads(bundle_path)
+    return {
+        "ok": "true",
+        "path": str(destination),
+        "filename": destination.name,
+        "directory": str(destination.parent),
+    }

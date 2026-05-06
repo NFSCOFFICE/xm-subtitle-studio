@@ -1,6 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
 import sys
 from pathlib import Path
+from PyInstaller.utils.hooks import collect_data_files
 
 
 ROOT = Path.cwd()
@@ -8,6 +9,12 @@ ROOT = Path.cwd()
 datas = [
     (str(ROOT / "static"), "static"),
 ]
+datas += collect_data_files("faster_whisper", includes=["assets/*"])
+if (ROOT / "vendor").exists():
+    datas.append((str(ROOT / "vendor"), "vendor"))
+large_v3_model = ROOT / "models" / "models--Systran--faster-whisper-large-v3"
+if large_v3_model.exists():
+    datas.append((str(large_v3_model), "models/models--Systran--faster-whisper-large-v3"))
 
 hiddenimports = [
     "uvicorn.logging",

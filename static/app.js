@@ -2,6 +2,10 @@ const form = document.getElementById("upload-form");
 const dropzone = document.getElementById("dropzone");
 const fileInput = document.getElementById("file-input");
 const uiLocale = document.getElementById("ui-locale");
+const historyTrigger = document.getElementById("history-trigger");
+const historyMenu = document.getElementById("history-menu");
+const historyList = document.getElementById("history-list");
+const historyCount = document.getElementById("history-count");
 const previewGrid = document.getElementById("preview-grid");
 const videoInput = document.getElementById("video-input");
 const videoPreview = document.getElementById("video-preview");
@@ -22,7 +26,6 @@ const modelSize = document.getElementById("model-size");
 const diarization = document.getElementById("diarization");
 const speakerCount = document.getElementById("speaker-count");
 const smartSplit = document.getElementById("smart-split");
-const assStyle = document.getElementById("ass-style");
 const presetChips = Array.from(document.querySelectorAll("[data-preset]"));
 const summaryPreset = document.getElementById("summary-preset");
 const summaryLanguage = document.getElementById("summary-language");
@@ -36,9 +39,8 @@ const jobStatusText = document.getElementById("job-status-text");
 const jobPill = document.getElementById("job-pill");
 const jobMessage = document.getElementById("job-message");
 const jobLanguage = document.getElementById("job-language");
+const currentDraftCard = document.getElementById("current-draft-card");
 const progressBar = document.getElementById("progress-bar");
-const jobList = document.getElementById("job-list");
-const jobFilter = document.getElementById("job-filter");
 const pollToggleButton = document.getElementById("poll-toggle-button");
 const runtimeGuide = document.getElementById("runtime-guide");
 const runtimeSteps = Array.from(document.querySelectorAll("[data-step]"));
@@ -60,9 +62,18 @@ const downloadBilingualAssLink = document.getElementById("download-bilingual-ass
 const editorCard = document.getElementById("editor-card");
 const editorTitle = document.getElementById("editor-title");
 const editorList = document.getElementById("editor-list");
+const offsetSlider = document.getElementById("offset-slider");
+const offsetValue = document.getElementById("offset-value");
+const offsetApplyButton = document.getElementById("offset-apply-button");
+const offsetResetButton = document.getElementById("offset-reset-button");
+const offsetNudgeButtons = Array.from(document.querySelectorAll("[data-offset-nudge]"));
+const waveformCanvas = document.getElementById("waveform-canvas");
+const waveformEmpty = document.getElementById("waveform-empty");
+const waveformRefreshButton = document.getElementById("waveform-refresh-button");
 const undoButton = document.getElementById("undo-button");
 const redoButton = document.getElementById("redo-button");
 const addSegmentButton = document.getElementById("add-segment-button");
+const SUBTITLE_PREVIEW_ENTRY_DELAY = 0;
 const saveEditorButton = document.getElementById("save-editor-button");
 const editorDraftState = document.getElementById("editor-draft-state");
 const qcFixButton = document.getElementById("qc-fix-button");
@@ -86,6 +97,11 @@ let draftSaveTimer = null;
 let activePreviewIndex = 0;
 let activePreviewMode = "none";
 let currentLocale = "zh-CN";
+let historyMenuOpen = false;
+let qualityAutoGroupCollapsed = true;
+let waveformJobId = null;
+let waveformRequestId = 0;
+let waveformData = null;
 const jobs = new Map();
 const editorStateByJob = new Map();
 const UI_LOCALES = [
@@ -145,7 +161,7 @@ const I18N = {
     outputs_doc: "文稿：Markdown / DOCX",
     stage_delivery_kicker: "增强交付",
     stage_delivery_title: "增强交付",
-    stage_delivery_note: "直接配置双语、说话人、断句和字幕风格。",
+    stage_delivery_note: "直接配置双语、说话人和断句优化。",
     field_translate: "双语翻译",
     field_diarization: "说话人分离",
     field_speakers: "说话人数",
@@ -175,6 +191,19 @@ const I18N = {
     quick_edit_label: "快速修改",
     quick_edit_title: "当前片段修改预览",
     timeline_label: "时间轴编辑",
+    offset_label: "时间偏移",
+    offset_title: "全片微调",
+    offset_note: "当整条字幕都偏早或偏晚时，直接按毫秒整体平移。",
+    offset_reset: "重置",
+    offset_apply: "应用到全部片段",
+    offset_applied: "已将全部片段整体偏移 {value}。",
+    offset_display: "{value} ms",
+    waveform_label: "波形时间轴",
+    waveform_title: "音频波形对照",
+    waveform_refresh: "刷新波形",
+    waveform_empty: "载入已完成任务后，这里会显示波形和字幕段落。",
+    waveform_loading: "正在载入波形…",
+    waveform_failed: "当前媒体无法解析出波形，可继续使用时间轴编辑。",
     quality_label: "字幕质检",
     quality_title: "字幕质检面板",
     footer_copy: "© 2026 XM. All rights reserved.",
@@ -191,7 +220,7 @@ const I18N = {
     status_failed: "生成失败",
     status_paused: "已暂停",
     status_idle: "待命",
-    status_draft: "草稿",
+    status_draft: "正在编辑",
     status_processing: "处理中",
     empty_jobs_title: "当前筛选下没有任务",
     empty_jobs_meta: "切换筛选或继续提交新任务。",
@@ -210,6 +239,7 @@ const I18N = {
     runtime_fact_language: "默认语言",
     runtime_language_auto: "自动检测",
     runtime_waiting_submit: "等待提交",
+    runtime_editing_now: "正在编辑",
     runtime_flow_title: "处理流程",
     runtime_step_submit_title: "01 提交任务",
     runtime_step_submit_note: "导入媒体并开始转写",
@@ -220,6 +250,16 @@ const I18N = {
     runtime_step_refine_title: "04 继续精修",
     runtime_step_refine_note: "进入时间轴编辑与视频预览",
     runtime_history_title: "草稿与历史",
+    current_draft_title: "正在编辑项目",
+    current_draft_empty: "当前没有草稿。完成任务后可从顶部历史记录拉回继续编辑。",
+    current_draft_restore_hint: "已从历史恢复到草稿，可继续编辑与导出。",
+    current_draft_saved: "草稿保存于 {time}",
+    current_draft_created: "创建于 {time}",
+    current_draft_open: "继续编辑",
+    history_menu: "历史记录",
+    history_empty: "当前没有历史记录。",
+    history_restore: "继续编辑",
+    history_restored: "已恢复为草稿并进入编辑。",
     pending_outputs_title: "待生成产物",
     pending_outputs_note: "任务完成后可一键下载 ZIP 和全部字幕文件。",
     format_srt: "SRT",
@@ -239,8 +279,10 @@ const I18N = {
     download_bilingual_md: "下载双语 Markdown",
     download_bilingual_docx: "下载双语 DOCX",
     download_bilingual_ass: "下载双语 ASS",
+    save_done: "已保存到：{path}",
+    save_failed: "保存失败",
     audio_preview_label: "音频预览",
-    subtitle_preview_default: "综艺感字幕预览",
+    subtitle_preview_default: "字幕预览",
     preview_field_speaker: "说话人",
     preview_field_start: "开始",
     preview_field_end: "结束",
@@ -278,20 +320,39 @@ const I18N = {
     qc_long_detail: "达到 {duration}s，建议拆分。",
     qc_line_too_long: "行长超限",
     qc_line_detail: "最长 {length} 字，建议控制在 {maximum} 字内。",
+    qc_text_cleanup: "文本清洗",
+    qc_text_cleanup_detail: "存在多余空格、换行或标点间距，建议统一清理。",
+    qc_text_noise: "字符噪音",
+    qc_text_noise_detail: "存在乱码占位、异常连写或重复符号，建议自动清理。",
+    qc_single_word_hold: "短词挂屏过久",
+    qc_single_word_hold_detail: "仅 {tokens} 个词却停留 {duration}s，建议压回 {maximum}s 以内。",
+    qc_reading_speed: "阅读速度过高",
+    qc_reading_speed_detail: "当前约 {cps} 字/秒，建议不超过 {maximum} 字/秒。",
+    qc_merge_candidate: "可合并短句",
+    qc_merge_candidate_detail: "这一段过短且与下一段间隔很小，建议合并处理。",
     qc_suspicious: "可疑错词",
     qc_suspicious_detail: "请检查：{tokens}",
     qc_overlap: "时间重叠",
     qc_overlap_detail: "与上一段重叠 {duration}s。",
+    qc_gap_too_tight: "段间距过紧",
+    qc_gap_too_tight_detail: "与下一段仅间隔 {gap}s，建议至少保留 {minimum}s。",
     qc_errors: "{count} 个严重问题",
     qc_warns: "{count} 个建议修正",
+    qc_auto_count: "{count} 个可自动修复",
+    qc_manual_count: "{count} 个需人工确认",
     qc_segments: "共 {count} 段",
     qc_pass: "质检通过",
     qc_empty_pass: "当前字幕未发现明显交付风险。",
+    qc_auto_section: "自动修复项",
+    qc_manual_section: "人工确认项",
+    qc_auto_empty: "当前没有可自动修复的问题。",
+    qc_manual_empty: "当前没有需要人工确认的问题。",
     editor_add_below: "新增下方",
     editor_split_current: "拆分当前",
     editor_merge_next: "合并下段",
     editor_delete_segment: "删除本段",
     backend_restart_draft: "服务重启，未完成任务已转为草稿，请重新提交。",
+    backend_detecting_language: "自动检测识别语言",
     backend_loading_model: "正在加载模型",
     backend_transcribing: "正在离线转写",
     backend_building_timeline: "正在生成字幕时间轴",
@@ -336,7 +397,7 @@ const I18N = {
     outputs_doc: "Docs: Markdown / DOCX",
     stage_delivery_kicker: "Delivery",
     stage_delivery_title: "Delivery Boost",
-    stage_delivery_note: "Configure bilingual output, speakers, splitting, and subtitle style.",
+    stage_delivery_note: "Configure bilingual output, speakers, and subtitle splitting.",
     field_translate: "Bilingual translation",
     field_diarization: "Speaker diarization",
     field_speakers: "Speaker count",
@@ -366,6 +427,19 @@ const I18N = {
     quick_edit_label: "Quick Edit",
     quick_edit_title: "Selected Segment Preview",
     timeline_label: "Timeline Editor",
+    offset_label: "Global Offset",
+    offset_title: "Timeline Shift",
+    offset_note: "When the whole subtitle track is early or late, shift every segment in milliseconds.",
+    offset_reset: "Reset",
+    offset_apply: "Apply to all segments",
+    offset_applied: "Applied {value} to the whole subtitle track.",
+    offset_display: "{value} ms",
+    waveform_label: "Waveform",
+    waveform_title: "Audio Waveform",
+    waveform_refresh: "Refresh waveform",
+    waveform_empty: "Load a completed job to display waveform and subtitle ranges here.",
+    waveform_loading: "Loading waveform…",
+    waveform_failed: "Waveform is unavailable for this media. Timeline editing still works.",
     quality_label: "Quality Check",
     quality_title: "Subtitle QA Panel",
     footer_copy: "© 2026 XM. All rights reserved.",
@@ -382,7 +456,7 @@ const I18N = {
     status_failed: "Failed",
     status_paused: "Paused",
     status_idle: "Idle",
-    status_draft: "Draft",
+    status_draft: "Editing",
     status_processing: "Processing",
     empty_jobs_title: "No jobs under this filter",
     empty_jobs_meta: "Change the filter or submit a new task.",
@@ -401,6 +475,7 @@ const I18N = {
     runtime_fact_language: "Language",
     runtime_language_auto: "Auto detect",
     runtime_waiting_submit: "Waiting to submit",
+    runtime_editing_now: "Editing",
     runtime_flow_title: "Pipeline",
     runtime_step_submit_title: "01 Submit job",
     runtime_step_submit_note: "Import media and start transcription",
@@ -411,6 +486,16 @@ const I18N = {
     runtime_step_refine_title: "04 Refine",
     runtime_step_refine_note: "Continue in timeline and preview",
     runtime_history_title: "Drafts & History",
+    current_draft_title: "Editing Now",
+    current_draft_empty: "No active draft right now. Restore one from the history menu above.",
+    current_draft_restore_hint: "Restored from history. Keep editing or export again.",
+    current_draft_saved: "Draft saved at {time}",
+    current_draft_created: "Created at {time}",
+    current_draft_open: "Continue editing",
+    history_menu: "History",
+    history_empty: "No history yet.",
+    history_restore: "Continue editing",
+    history_restored: "Restored as draft and opened for editing.",
     pending_outputs_title: "Pending outputs",
     pending_outputs_note: "Download ZIP and all subtitle files after completion.",
     format_srt: "SRT",
@@ -430,6 +515,8 @@ const I18N = {
     download_bilingual_md: "Download bilingual Markdown",
     download_bilingual_docx: "Download bilingual DOCX",
     download_bilingual_ass: "Download bilingual ASS",
+    save_done: "Saved to: {path}",
+    save_failed: "Save failed",
     audio_preview_label: "Audio Preview",
     subtitle_preview_default: "Subtitle preview",
     preview_field_speaker: "Speaker",
@@ -469,20 +556,39 @@ const I18N = {
     qc_long_detail: "{duration}s long. Consider splitting it.",
     qc_line_too_long: "Line too long",
     qc_line_detail: "Longest line is {length} chars. Recommended max is {maximum}.",
+    qc_text_cleanup: "Text cleanup",
+    qc_text_cleanup_detail: "Spacing, line breaks, or punctuation spacing can be normalized.",
+    qc_text_noise: "Text noise",
+    qc_text_noise_detail: "Encoding placeholders, broken repeats, or noisy symbols can be cleaned automatically.",
+    qc_single_word_hold: "Short word held too long",
+    qc_single_word_hold_detail: "Only {tokens} token(s) stay on screen for {duration}s. Recommended max is {maximum}s.",
+    qc_reading_speed: "Reading speed too high",
+    qc_reading_speed_detail: "Currently about {cps} chars/sec. Recommended max is {maximum}.",
+    qc_merge_candidate: "Merge candidate",
+    qc_merge_candidate_detail: "This segment is too short and sits too close to the next one.",
     qc_suspicious: "Suspicious text",
     qc_suspicious_detail: "Check: {tokens}",
     qc_overlap: "Time overlap",
     qc_overlap_detail: "Overlaps the previous segment by {duration}s.",
+    qc_gap_too_tight: "Gap too tight",
+    qc_gap_too_tight_detail: "Only {gap}s before the next segment. Recommended minimum is {minimum}s.",
     qc_errors: "{count} critical issues",
     qc_warns: "{count} suggestions",
+    qc_auto_count: "{count} auto-fixable",
+    qc_manual_count: "{count} manual review",
     qc_segments: "{count} segments",
     qc_pass: "QA passed",
     qc_empty_pass: "No obvious delivery risks found.",
+    qc_auto_section: "Auto-fixable",
+    qc_manual_section: "Manual review",
+    qc_auto_empty: "No auto-fixable issues right now.",
+    qc_manual_empty: "No manual-review issues right now.",
     editor_add_below: "Add below",
     editor_split_current: "Split current",
     editor_merge_next: "Merge next",
     editor_delete_segment: "Delete segment",
     backend_restart_draft: "Service restarted. Unfinished jobs were converted to drafts. Please submit again.",
+    backend_detecting_language: "Detecting language",
     backend_loading_model: "Loading model",
     backend_transcribing: "Running offline transcription",
     backend_building_timeline: "Building subtitle timeline",
@@ -527,7 +633,7 @@ const I18N = {
     outputs_doc: "原稿: Markdown / DOCX",
     stage_delivery_kicker: "納品拡張",
     stage_delivery_title: "強化納品",
-    stage_delivery_note: "バイリンガル、話者、分割、字幕スタイルを直接設定します。",
+    stage_delivery_note: "バイリンガル、話者、分割最適化を直接設定します。",
     field_translate: "バイリンガル翻訳",
     field_diarization: "話者分離",
     field_speakers: "話者数",
@@ -557,6 +663,19 @@ const I18N = {
     quick_edit_label: "クイック編集",
     quick_edit_title: "選択セグメントの編集",
     timeline_label: "タイムライン編集",
+    offset_label: "時間オフセット",
+    offset_title: "全体微調整",
+    offset_note: "字幕全体が早い・遅い場合、ミリ秒単位でまとめて移動します。",
+    offset_reset: "リセット",
+    offset_apply: "全セグメントに適用",
+    offset_applied: "全セグメントに {value} を適用しました。",
+    offset_display: "{value} ms",
+    waveform_label: "波形タイムライン",
+    waveform_title: "音声波形",
+    waveform_refresh: "波形を更新",
+    waveform_empty: "完了済みジョブを開くと、ここに波形と字幕範囲が表示されます。",
+    waveform_loading: "波形を読み込み中…",
+    waveform_failed: "このメディアでは波形を生成できません。タイムライン編集は継続できます。",
     quality_label: "品質チェック",
     quality_title: "字幕品質パネル",
     footer_copy: "© 2026 XM. All rights reserved.",
@@ -573,7 +692,7 @@ const I18N = {
     status_failed: "失敗",
     status_paused: "一時停止",
     status_idle: "待機",
-    status_draft: "下書き",
+    status_draft: "編集中",
     status_processing: "処理中",
     empty_jobs_title: "この条件ではタスクがありません",
     empty_jobs_meta: "フィルターを変えるか、新しいタスクを送信してください。",
@@ -591,6 +710,7 @@ const I18N = {
     runtime_fact_language: "言語",
     runtime_language_auto: "自動判定",
     runtime_waiting_submit: "送信待ち",
+    runtime_editing_now: "編集中",
     runtime_flow_title: "処理フロー",
     runtime_step_submit_title: "01 タスク送信",
     runtime_step_submit_note: "メディアを読み込んで文字起こしを開始",
@@ -601,6 +721,16 @@ const I18N = {
     runtime_step_refine_title: "04 仕上げ編集",
     runtime_step_refine_note: "タイムライン編集とプレビューへ進む",
     runtime_history_title: "下書きと履歴",
+    current_draft_title: "編集中のプロジェクト",
+    current_draft_empty: "現在アクティブな下書きはありません。上部の履歴から戻せます。",
+    current_draft_restore_hint: "履歴から下書きに戻しました。続けて編集できます。",
+    current_draft_saved: "下書き保存 {time}",
+    current_draft_created: "作成 {time}",
+    current_draft_open: "編集を続ける",
+    history_menu: "履歴",
+    history_empty: "履歴はまだありません。",
+    history_restore: "編集を続ける",
+    history_restored: "下書きに復元して編集を再開しました。",
     pending_outputs_title: "生成待ちの出力",
     pending_outputs_note: "完了後に ZIP とすべての字幕ファイルをまとめて取得できます。",
     format_srt: "SRT",
@@ -620,6 +750,8 @@ const I18N = {
     download_bilingual_md: "二言語 Markdown をダウンロード",
     download_bilingual_docx: "二言語 DOCX をダウンロード",
     download_bilingual_ass: "二言語 ASS をダウンロード",
+    save_done: "保存先: {path}",
+    save_failed: "保存に失敗しました",
     audio_preview_label: "音声プレビュー",
     subtitle_preview_default: "字幕プレビュー",
     preview_field_speaker: "話者",
@@ -660,20 +792,39 @@ const I18N = {
     qc_long_detail: "{duration}s あります。分割を推奨します。",
     qc_line_too_long: "行が長すぎます",
     qc_line_detail: "最長 {length} 文字です。{maximum} 文字以内を推奨します。",
+    qc_text_cleanup: "テキスト整形",
+    qc_text_cleanup_detail: "余分な空白、改行、句読点まわりを整えます。",
+    qc_text_noise: "文字ノイズ",
+    qc_text_noise_detail: "文字化け記号や異常な連続文字を自動で整理できます。",
+    qc_single_word_hold: "短語の表示が長すぎます",
+    qc_single_word_hold_detail: "{tokens}語だけで {duration}s 表示されています。{maximum}s 以内を推奨します。",
+    qc_reading_speed: "読む速度が高すぎます",
+    qc_reading_speed_detail: "現在 {cps} 文字/秒です。{maximum} 文字/秒以下を推奨します。",
+    qc_merge_candidate: "短文を結合推奨",
+    qc_merge_candidate_detail: "短すぎて次の字幕と近すぎるため、結合候補です。",
     qc_suspicious: "疑わしい文字列",
     qc_suspicious_detail: "確認: {tokens}",
     qc_overlap: "時間重複",
     qc_overlap_detail: "前のセグメントと {duration}s 重複しています。",
+    qc_gap_too_tight: "間隔が短すぎます",
+    qc_gap_too_tight_detail: "次のセグメントまで {gap}s しかありません。最低 {minimum}s を推奨します。",
     qc_errors: "重大な問題 {count} 件",
     qc_warns: "修正提案 {count} 件",
+    qc_auto_count: "自動修正 {count} 件",
+    qc_manual_count: "要確認 {count} 件",
     qc_segments: "全 {count} セグメント",
     qc_pass: "品質チェック通過",
     qc_empty_pass: "明らかな納品リスクは見つかりません。",
+    qc_auto_section: "自動修正項目",
+    qc_manual_section: "手動確認項目",
+    qc_auto_empty: "自動修正できる問題はありません。",
+    qc_manual_empty: "手動確認が必要な項目はありません。",
     editor_add_below: "下に追加",
     editor_split_current: "現在を分割",
     editor_merge_next: "次と結合",
     editor_delete_segment: "削除",
     backend_restart_draft: "サービスが再起動され、未完了タスクは下書きになりました。再送信してください。",
+    backend_detecting_language: "認識言語を自動検出中",
     backend_loading_model: "モデルを読み込み中",
     backend_transcribing: "ローカル文字起こし中",
     backend_building_timeline: "字幕タイムラインを生成中",
@@ -718,7 +869,7 @@ const I18N = {
     outputs_doc: "Κείμενο: Markdown / DOCX",
     stage_delivery_kicker: "Παράδοση",
     stage_delivery_title: "Ενισχυμένη παράδοση",
-    stage_delivery_note: "Ρύθμισε δίγλωσσο, ομιλητές, split και στυλ υποτίτλων.",
+    stage_delivery_note: "Ρύθμισε δίγλωσσο, ομιλητές και βελτιστοποίηση split.",
     field_translate: "Δίγλωσση μετάφραση",
     field_diarization: "Διαχωρισμός ομιλητών",
     field_speakers: "Αριθμός ομιλητών",
@@ -748,6 +899,19 @@ const I18N = {
     quick_edit_label: "Γρήγορη επεξεργασία",
     quick_edit_title: "Επεξεργασία τρέχοντος τμήματος",
     timeline_label: "Timeline editor",
+    offset_label: "Μετατόπιση χρόνου",
+    offset_title: "Ολική μικρορύθμιση",
+    offset_note: "Όταν όλοι οι υπότιτλοι είναι νωρίς ή αργά, μετακίνησέ τους συνολικά σε ms.",
+    offset_reset: "Επαναφορά",
+    offset_apply: "Εφαρμογή σε όλα",
+    offset_applied: "Εφαρμόστηκε μετατόπιση {value} σε όλα τα τμήματα.",
+    offset_display: "{value} ms",
+    waveform_label: "Κυματομορφή",
+    waveform_title: "Κυματομορφή ήχου",
+    waveform_refresh: "Ανανέωση κυματομορφής",
+    waveform_empty: "Άνοιξε μια ολοκληρωμένη εργασία για να δεις εδώ την κυματομορφή και τα ranges.",
+    waveform_loading: "Φόρτωση κυματομορφής…",
+    waveform_failed: "Δεν είναι διαθέσιμη κυματομορφή για αυτό το μέσο. Η επεξεργασία timeline συνεχίζει κανονικά.",
     quality_label: "Ποιοτικός έλεγχος",
     quality_title: "Πίνακας ποιοτικού ελέγχου",
     footer_copy: "© 2026 XM. All rights reserved.",
@@ -764,7 +928,7 @@ const I18N = {
     status_failed: "Απέτυχε",
     status_paused: "Σε παύση",
     status_idle: "Αναμονή",
-    status_draft: "Πρόχειρο",
+    status_draft: "Σε επεξεργασία",
     status_processing: "Επεξεργασία",
     empty_jobs_title: "Δεν υπάρχουν εργασίες σε αυτό το φίλτρο",
     empty_jobs_meta: "Άλλαξε φίλτρο ή υπέβαλε νέα εργασία.",
@@ -782,6 +946,7 @@ const I18N = {
     runtime_fact_language: "Γλώσσα",
     runtime_language_auto: "Αυτόματη ανίχνευση",
     runtime_waiting_submit: "Αναμονή υποβολής",
+    runtime_editing_now: "Σε επεξεργασία",
     runtime_flow_title: "Ροή επεξεργασίας",
     runtime_step_submit_title: "01 Υποβολή εργασίας",
     runtime_step_submit_note: "Εισαγωγή μέσου και έναρξη μεταγραφής",
@@ -792,6 +957,16 @@ const I18N = {
     runtime_step_refine_title: "04 Τελική επεξεργασία",
     runtime_step_refine_note: "Συνέχεια σε timeline και preview",
     runtime_history_title: "Πρόχειρα και ιστορικό",
+    current_draft_title: "Τρέχον έργο επεξεργασίας",
+    current_draft_empty: "Δεν υπάρχει ενεργό πρόχειρο. Μπορείς να επαναφέρεις κάτι από το ιστορικό επάνω.",
+    current_draft_restore_hint: "Επαναφέρθηκε από το ιστορικό και είναι ξανά πρόχειρο.",
+    current_draft_saved: "Αποθηκεύτηκε ως πρόχειρο {time}",
+    current_draft_created: "Δημιουργία {time}",
+    current_draft_open: "Συνέχεια επεξεργασίας",
+    history_menu: "Ιστορικό",
+    history_empty: "Δεν υπάρχει ιστορικό ακόμη.",
+    history_restore: "Συνέχεια επεξεργασίας",
+    history_restored: "Αποκαταστάθηκε ως πρόχειρο και άνοιξε για επεξεργασία.",
     pending_outputs_title: "Αναμένονται αρχεία",
     pending_outputs_note: "Μετά την ολοκλήρωση θα μπορείς να κατεβάσεις ZIP και όλα τα αρχεία υποτίτλων.",
     format_srt: "SRT",
@@ -811,6 +986,8 @@ const I18N = {
     download_bilingual_md: "Λήψη δίγλωσσου Markdown",
     download_bilingual_docx: "Λήψη δίγλωσσου DOCX",
     download_bilingual_ass: "Λήψη δίγλωσσου ASS",
+    save_done: "Αποθηκεύτηκε σε: {path}",
+    save_failed: "Αποτυχία αποθήκευσης",
     audio_preview_label: "Προεπισκόπηση ήχου",
     subtitle_preview_default: "Προεπισκόπηση υποτίτλων",
     preview_field_speaker: "Ομιλητής",
@@ -851,20 +1028,39 @@ const I18N = {
     qc_long_detail: "Διάρκεια {duration}s. Προτείνεται διαχωρισμός.",
     qc_line_too_long: "Μεγάλη γραμμή",
     qc_line_detail: "Η μεγαλύτερη γραμμή έχει {length} χαρακτήρες. Προτείνεται έως {maximum}.",
+    qc_text_cleanup: "Καθαρισμός κειμένου",
+    qc_text_cleanup_detail: "Κανονικοποίηση κενών, αλλαγών γραμμής και στίξης.",
+    qc_text_noise: "Θόρυβος κειμένου",
+    qc_text_noise_detail: "Σύμβολα αλλοίωσης ή αφύσικες επαναλήψεις μπορούν να καθαριστούν αυτόματα.",
+    qc_single_word_hold: "Πολύ μεγάλη διάρκεια σύντομης λέξης",
+    qc_single_word_hold_detail: "Μόνο {tokens} λέξη/λέξεις μένουν {duration}s. Προτείνεται έως {maximum}s.",
+    qc_reading_speed: "Πολύ γρήγορη ανάγνωση",
+    qc_reading_speed_detail: "Τώρα είναι περίπου {cps} χαρακτ./δευτ. Προτείνεται έως {maximum}.",
+    qc_merge_candidate: "Υποψήφιο για συγχώνευση",
+    qc_merge_candidate_detail: "Το τμήμα είναι πολύ μικρό και πολύ κοντά στο επόμενο.",
     qc_suspicious: "Ύποπτο κείμενο",
     qc_suspicious_detail: "Έλεγχος: {tokens}",
     qc_overlap: "Επικάλυψη χρόνου",
     qc_overlap_detail: "Επικαλύπτει το προηγούμενο τμήμα κατά {duration}s.",
+    qc_gap_too_tight: "Πολύ μικρό κενό",
+    qc_gap_too_tight_detail: "Μόνο {gap}s μέχρι το επόμενο τμήμα. Προτείνεται τουλάχιστον {minimum}s.",
     qc_errors: "{count} σοβαρά θέματα",
     qc_warns: "{count} προτάσεις",
+    qc_auto_count: "{count} αυτόματες διορθώσεις",
+    qc_manual_count: "{count} για χειροκίνητο έλεγχο",
     qc_segments: "{count} τμήματα",
     qc_pass: "Ο έλεγχος πέρασε",
     qc_empty_pass: "Δεν βρέθηκαν εμφανείς κίνδυνοι παράδοσης.",
+    qc_auto_section: "Αυτόματες διορθώσεις",
+    qc_manual_section: "Χειροκίνητος έλεγχος",
+    qc_auto_empty: "Δεν υπάρχουν αυτόματα διορθώσιμα θέματα.",
+    qc_manual_empty: "Δεν υπάρχουν θέματα για χειροκίνητο έλεγχο.",
     editor_add_below: "Προσθήκη κάτω",
     editor_split_current: "Διαχωρισμός",
     editor_merge_next: "Συγχώνευση επόμενου",
     editor_delete_segment: "Διαγραφή",
     backend_restart_draft: "Η υπηρεσία επανεκκινήθηκε. Οι μη ολοκληρωμένες εργασίες έγιναν πρόχειρα. Υπόβαλε ξανά.",
+    backend_detecting_language: "Αυτόματος εντοπισμός γλώσσας",
     backend_loading_model: "Φόρτωση μοντέλου",
     backend_transcribing: "Τοπική μεταγραφή",
     backend_building_timeline: "Δημιουργία timeline υποτίτλων",
@@ -886,7 +1082,6 @@ const PRESET_CONFIGS = {
     diarization: "off",
     speakerCount: "2",
     smartSplit: "off",
-    assStyle: "variety",
   },
   balanced: {
     language: "auto",
@@ -895,7 +1090,6 @@ const PRESET_CONFIGS = {
     diarization: "off",
     speakerCount: "2",
     smartSplit: "on",
-    assStyle: "variety",
   },
   delivery: {
     language: "auto",
@@ -904,16 +1098,24 @@ const PRESET_CONFIGS = {
     diarization: "on",
     speakerCount: "2",
     smartSplit: "on",
-    assStyle: "punch",
   },
 };
 
 const QC_LIMITS = {
   shortDuration: 0.8,
   longDuration: 7,
+  singleWordHoldDuration: 2.6,
+  singleWordHoldTokenLimit: 2,
+  singleWordHoldCharLimit: 12,
   maxLineLength: 26,
   maxCompactToken: 18,
+  maxCps: 18,
+  idealCps: 14,
+  minGap: 0.08,
+  mergeGap: 0.22,
+  orphanChars: 8,
 };
+const QC_AUTO_MERGE_ENABLED = false;
 
 function t(key, params = {}) {
   const table = I18N[currentLocale] || I18N["zh-CN"];
@@ -1037,6 +1239,12 @@ function setDraftState(message) {
   editorDraftState.textContent = message || t("draft_hint");
 }
 
+function setHistoryMenuOpen(open) {
+  historyMenuOpen = open;
+  historyMenu?.classList.toggle("hidden", !open);
+  historyTrigger?.classList.toggle("is-open", open);
+}
+
 function ensureEditorState(jobId, segments) {
   if (!editorStateByJob.has(jobId)) {
     editorStateByJob.set(jobId, {
@@ -1120,6 +1328,18 @@ function setPreviewVisible(visible) {
   previewGrid.classList.toggle("hidden", !visible);
 }
 
+function scrollToEditorWorkspace() {
+  const target = !previewGrid.classList.contains("hidden")
+    ? previewGrid
+    : (!editorCard.classList.contains("hidden") ? editorCard : null);
+  if (!target) {
+    return;
+  }
+  requestAnimationFrame(() => {
+    target.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+}
+
 function currentMediaElement() {
   return activePreviewMode === "audio" ? audioPlayer : videoPreview;
 }
@@ -1154,7 +1374,9 @@ function syncMediaPreviewForJob(job) {
     setPreviewMode("none");
     clearVideoPreviewSource();
     clearAudioPreviewSource();
+    updatePreviewVisual(null, { allowPlaceholder: false });
     setPreviewVisible(false);
+    resetWaveformState("waveform_empty");
     return;
   }
 
@@ -1171,6 +1393,8 @@ function syncMediaPreviewForJob(job) {
       videoPreview.src = `${job.media_preview_url}?t=${encodeURIComponent(job.created_at || job.job_id)}`;
     }
     setPreviewMode("video");
+    updatePreviewVisual(null, { allowPlaceholder: false });
+    ensureWaveformDataForJob(job);
     return;
   }
 
@@ -1183,6 +1407,8 @@ function syncMediaPreviewForJob(job) {
     clearAudioPreviewSource();
   }
   setPreviewMode("audio");
+  updatePreviewVisual(null, { allowPlaceholder: false });
+  ensureWaveformDataForJob(job);
 }
 
 function setBusy(busy) {
@@ -1198,7 +1424,6 @@ function currentPresetState() {
     diarization: diarization.value,
     speakerCount: speakerCount.value,
     smartSplit: smartSplit.value,
-    assStyle: assStyle.value,
   };
 }
 
@@ -1244,6 +1469,7 @@ function displayLanguageLabel(value) {
 function localizeBackendMessage(message) {
   const messageMap = {
     "Service restarted. Unfinished jobs were converted to drafts. Please submit again.": "backend_restart_draft",
+    "Detecting language": "backend_detecting_language",
     "Loading model": "backend_loading_model",
     "Running offline transcription": "backend_transcribing",
     "Building subtitle timeline": "backend_building_timeline",
@@ -1284,9 +1510,6 @@ function buildEnhancementSummary(state) {
   if (state.smartSplit === "on") {
     flags.push(t("enhancement_split"));
   }
-  if (state.assStyle !== "variety") {
-    flags.push(`${t("enhancement_ass")} ${assStyle.selectedOptions[0]?.textContent || state.assStyle}`);
-  }
   return flags.length ? flags.join(" / ") : t("enhancement_default");
 }
 
@@ -1324,7 +1547,6 @@ function applyPreset(name) {
   diarization.value = preset.diarization;
   speakerCount.value = preset.speakerCount;
   smartSplit.value = preset.smartSplit;
-  assStyle.value = preset.assStyle;
   syncPresetHighlight();
   updatePreviewVisual();
 }
@@ -1358,6 +1580,201 @@ function parseEditorTime(value) {
   return (hours * 3600) + (minutes * 60) + seconds;
 }
 
+function formatOffsetValue(milliseconds) {
+  const rounded = Math.round(Number(milliseconds) || 0);
+  return `${rounded > 0 ? "+" : ""}${rounded} ms`;
+}
+
+function updateOffsetDisplay() {
+  if (!offsetValue || !offsetSlider) {
+    return;
+  }
+  offsetValue.textContent = formatOffsetValue(offsetSlider.value);
+}
+
+function resetWaveformState(messageKey = "waveform_empty") {
+  waveformJobId = null;
+  waveformData = null;
+  waveformRequestId += 1;
+  if (waveformEmpty) {
+    waveformEmpty.textContent = t(messageKey);
+    waveformEmpty.classList.remove("hidden");
+  }
+  drawWaveform();
+}
+
+function buildWaveformPeaks(channelData, samplesPerBucket) {
+  const peaks = [];
+  for (let index = 0; index < channelData.length; index += samplesPerBucket) {
+    const end = Math.min(channelData.length, index + samplesPerBucket);
+    let peak = 0;
+    for (let cursor = index; cursor < end; cursor += 1) {
+      const amplitude = Math.abs(channelData[cursor]);
+      if (amplitude > peak) {
+        peak = amplitude;
+      }
+    }
+    peaks.push(peak);
+  }
+  return peaks;
+}
+
+async function ensureWaveformDataForJob(job) {
+  if (!job?.media_preview_url || job.status !== "completed") {
+    resetWaveformState("waveform_empty");
+    return;
+  }
+  if (waveformJobId === job.job_id && waveformData) {
+    drawWaveform();
+    return;
+  }
+
+  const requestId = ++waveformRequestId;
+  waveformJobId = job.job_id;
+  waveformData = null;
+  waveformEmpty.textContent = t("waveform_loading");
+  waveformEmpty.classList.remove("hidden");
+  drawWaveform();
+
+  try {
+    const response = await fetch(`${job.media_preview_url}?waveform=${encodeURIComponent(job.created_at || job.job_id)}`);
+    if (!response.ok) {
+      throw new Error(`waveform ${response.status}`);
+    }
+    const bytes = await response.arrayBuffer();
+    const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextCtor) {
+      throw new Error("audio-context-unavailable");
+    }
+    const audioContext = new AudioContextCtor();
+    const audioBuffer = await audioContext.decodeAudioData(bytes.slice(0));
+    if (typeof audioContext.close === "function") {
+      audioContext.close().catch(() => {});
+    }
+
+    const channelData = audioBuffer.getChannelData(0);
+    const bucketCount = Math.max(320, Math.floor((waveformCanvas?.clientWidth || 960) / 2));
+    const samplesPerBucket = Math.max(32, Math.floor(channelData.length / bucketCount));
+    const peaks = buildWaveformPeaks(channelData, samplesPerBucket);
+
+    if (requestId !== waveformRequestId) {
+      return;
+    }
+
+    waveformData = {
+      duration: audioBuffer.duration || 0,
+      peaks,
+    };
+    waveformEmpty.classList.add("hidden");
+    drawWaveform();
+  } catch (error) {
+    if (requestId !== waveformRequestId) {
+      return;
+    }
+    waveformData = null;
+    waveformEmpty.textContent = t("waveform_failed");
+    waveformEmpty.classList.remove("hidden");
+    drawWaveform();
+  }
+}
+
+function drawWaveform() {
+  if (!waveformCanvas) {
+    return;
+  }
+  const width = Math.max(320, Math.floor(waveformCanvas.clientWidth || waveformCanvas.parentElement?.clientWidth || 320));
+  const height = Math.max(120, Math.floor(waveformCanvas.clientHeight || 140));
+  const dpr = window.devicePixelRatio || 1;
+  waveformCanvas.width = Math.floor(width * dpr);
+  waveformCanvas.height = Math.floor(height * dpr);
+  const context = waveformCanvas.getContext("2d");
+  if (!context) {
+    return;
+  }
+  context.setTransform(dpr, 0, 0, dpr, 0, 0);
+  context.clearRect(0, 0, width, height);
+
+  context.fillStyle = "rgba(10, 19, 34, 0.94)";
+  context.fillRect(0, 0, width, height);
+
+  const segments = currentSegments();
+  const duration = waveformData?.duration || currentMediaElement()?.duration || 0;
+  if (duration > 0) {
+    segments.forEach((segment, index) => {
+      const startX = Math.max(0, (Number(segment.start || 0) / duration) * width);
+      const endX = Math.min(width, (Number(segment.end || 0) / duration) * width);
+      if (endX <= startX) {
+        return;
+      }
+      context.fillStyle = index === activePreviewIndex ? "rgba(73, 211, 255, 0.18)" : "rgba(73, 211, 255, 0.08)";
+      context.fillRect(startX, 0, endX - startX, height);
+    });
+  }
+
+  const peaks = waveformData?.peaks || [];
+  const centerY = height / 2;
+  if (peaks.length) {
+    const step = width / peaks.length;
+    context.fillStyle = "rgba(117, 210, 255, 0.9)";
+    peaks.forEach((peak, index) => {
+      const amplitude = Math.max(2, peak * (height * 0.44));
+      const x = index * step;
+      context.fillRect(x, centerY - amplitude / 2, Math.max(1, step * 0.72), amplitude);
+    });
+  }
+
+  context.strokeStyle = "rgba(98, 139, 201, 0.24)";
+  context.lineWidth = 1;
+  for (let tick = 1; tick < 4; tick += 1) {
+    const y = (height / 4) * tick;
+    context.beginPath();
+    context.moveTo(0, y);
+    context.lineTo(width, y);
+    context.stroke();
+  }
+
+  const media = currentMediaElement();
+  if (duration > 0 && media && Number.isFinite(media.currentTime)) {
+    const playheadX = (media.currentTime / duration) * width;
+    context.strokeStyle = "#bff7ff";
+    context.lineWidth = 2;
+    context.beginPath();
+    context.moveTo(playheadX, 0);
+    context.lineTo(playheadX, height);
+    context.stroke();
+  }
+}
+
+function applyGlobalOffset() {
+  const state = currentEditorState();
+  if (!state || !offsetSlider) {
+    return;
+  }
+  const offsetMs = Number(offsetSlider.value || 0);
+  if (!offsetMs) {
+    return;
+  }
+  const offsetSeconds = offsetMs / 1000;
+  const originalSegments = currentSegments();
+  if (!originalSegments.length) {
+    return;
+  }
+  const minStart = Math.min(...originalSegments.map((segment) => Number(segment.start || 0)));
+  const clampedOffset = Math.max(offsetSeconds, -minStart);
+  const shiftedSegments = originalSegments.map((segment) => ({
+    ...segment,
+    start: Number(Math.max(0, Number(segment.start || 0) + clampedOffset).toFixed(3)),
+    end: Number(Math.max(0, Number(segment.end || 0) + clampedOffset).toFixed(3)),
+  }));
+
+  pushHistory(shiftedSegments);
+  renderEditorFromState();
+  setDraftState(t("offset_applied", { value: formatOffsetValue(clampedOffset * 1000) }));
+  scheduleDraftSave();
+  offsetSlider.value = "0";
+  updateOffsetDisplay();
+}
+
 function buildEmptySegment(baseSegment = null) {
   const start = baseSegment ? Number(baseSegment.end || 0) : 0;
   return {
@@ -1383,6 +1800,7 @@ function pushHistory(segments) {
   state.history.push(cloneSegments(segments));
   state.index = state.history.length - 1;
   updateUndoRedoButtons();
+  drawWaveform();
 }
 
 function updateUndoRedoButtons() {
@@ -1410,90 +1828,228 @@ function applyHistory(direction) {
 }
 
 function updateSummary(job) {
-  jobStatusText.textContent = statusLabel(job.status) || t("status_processing");
+  const isEditing = Boolean(job.has_draft);
+  const headlineStatus = isEditing ? "draft" : (job.status || "processing");
+  const pillStatus = isEditing ? "draft" : (pollPaused ? "paused" : (job.status || "running"));
+  jobStatusText.textContent = statusLabel(headlineStatus) || t("status_processing");
   jobPill.classList.remove("hidden");
-  jobPill.textContent = statusLabel(pollPaused ? "paused" : (job.status || "running"));
-  jobPill.dataset.status = pollPaused ? "paused" : (job.status || "idle");
-  jobMessage.textContent = job.error || localizeBackendMessage(job.message) || "";
+  jobPill.textContent = statusLabel(pillStatus);
+  jobPill.dataset.status = pillStatus || "idle";
+  if (job.error) {
+    jobMessage.textContent = job.error;
+  } else if (isEditing) {
+    jobMessage.textContent = t("runtime_editing_now");
+  } else {
+    jobMessage.textContent = localizeBackendMessage(job.message) || "";
+  }
   jobLanguage.textContent = displayLanguageLabel(job.detected_language || job.language);
   progressBar.style.width = `${Math.max(2, Math.round((job.progress || 0) * 100))}%`;
   updateRuntimeSteps(job.status || "idle");
 }
 
-function getFilteredJobs() {
-  const entries = Array.from(jobs.values()).sort((a, b) => {
-    if (isDraftJob(a) !== isDraftJob(b)) {
-      return isDraftJob(a) ? -1 : 1;
-    }
-    return b.created_at.localeCompare(a.created_at);
+function getSortedJobs() {
+  return Array.from(jobs.values()).sort((a, b) => b.created_at.localeCompare(a.created_at));
+}
+
+function getHistoryJobs() {
+  const editingJobId = getCurrentEditingJob()?.job_id || null;
+  return getSortedJobs().filter((job) => job.job_id !== editingJobId);
+}
+
+function getCurrentEditingJob() {
+  const activeJob = jobs.get(activeJobId);
+  if (activeJob && isDraftJob(activeJob)) {
+    return activeJob;
+  }
+  return getSortedJobs().find((job) => isDraftJob(job)) || null;
+}
+
+async function openJobForEditing(jobId, { restoreIfNeeded = true } = {}) {
+  activeJobId = jobId;
+  const latestJob = await refreshJob(jobId);
+  if (!latestJob) {
+    return;
+  }
+  if (latestJob.has_draft) {
+    ensureEditorState(latestJob.job_id, editorSegmentsForJob(latestJob));
+    setHistoryMenuOpen(false);
+    renderActiveJob();
+    setDraftState(t("runtime_editing_now"));
+    scrollToEditorWorkspace();
+    return;
+  }
+  if (restoreIfNeeded) {
+    await restoreJobToDraft(jobId);
+    return;
+  }
+  setHistoryMenuOpen(false);
+  renderActiveJob();
+  scrollToEditorWorkspace();
+}
+
+async function restoreJobToDraft(jobId) {
+  const job = jobs.get(jobId);
+  if (!job) {
+    return;
+  }
+  const segments = cloneSegments(job.segments || []);
+  if (!segments.length) {
+    return;
+  }
+  const response = await fetch(`/api/jobs/${jobId}/draft`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ segments }),
   });
-  const filter = jobFilter.value;
-  if (filter === "all") {
-    return entries;
+  const updatedJob = await response.json();
+  if (!response.ok) {
+    throw new Error(updatedJob.detail || t("draft_save_failed"));
   }
-  if (filter === "draft") {
-    return entries.filter((job) => isDraftJob(job));
+  jobs.set(updatedJob.job_id, updatedJob);
+  activeJobId = updatedJob.job_id;
+  ensureEditorState(updatedJob.job_id, editorSegmentsForJob(updatedJob));
+  setHistoryMenuOpen(false);
+  renderActiveJob();
+  setDraftState(t("history_restored"));
+  scrollToEditorWorkspace();
+}
+
+function renderCurrentDraftCard() {
+  if (!currentDraftCard) {
+    return;
   }
-  if (filter === "running") {
-    return entries.filter((job) => job.status === "queued" || job.status === "running");
+  const editingJob = getCurrentEditingJob();
+  currentDraftCard.innerHTML = "";
+
+  if (!editingJob) {
+    currentDraftCard.innerHTML = `<div class="current-draft-empty">${t("current_draft_empty")}</div>`;
+    return;
   }
-  return entries.filter((job) => job.status === filter);
+
+  const savedTime = formatDraftTimestamp(editingJob.draft_updated_at || editingJob.created_at);
+  currentDraftCard.innerHTML = `
+    <div class="job-item is-active">
+      <div class="job-item-top">
+        <p class="job-item-name">${editingJob.original_name}</p>
+        <div class="job-item-badges">
+          <span class="status-pill" data-status="draft">${statusLabel("draft")}</span>
+          <span class="status-pill" data-status="${editingJob.status}">${statusLabel(editingJob.status)}</span>
+        </div>
+      </div>
+      <p class="job-item-meta">${t("current_draft_restore_hint")}</p>
+      <p class="job-item-meta">${t("current_draft_saved", { time: savedTime })}</p>
+      <div class="current-draft-actions">
+        <button type="button" class="secondary-button compact-button" data-open-current-draft>${t("current_draft_open")}</button>
+        <button type="button" class="job-delete-button current-draft-delete" data-delete-job="${editingJob.job_id}" aria-label="${t("delete_job")}">${t("delete_job")}</button>
+      </div>
+    </div>
+  `;
+
+  currentDraftCard.querySelector("[data-open-current-draft]")?.addEventListener("click", async () => {
+    await openJobForEditing(editingJob.job_id, { restoreIfNeeded: false });
+  });
+  currentDraftCard.querySelector("[data-delete-job]")?.addEventListener("click", () => {
+    deleteJob(editingJob.job_id);
+  });
 }
 
 function renderJobList() {
-  const entries = getFilteredJobs();
-  jobList.innerHTML = "";
+  const entries = getHistoryJobs();
+  historyList.innerHTML = "";
   syncRuntimeEmptyState();
+  renderCurrentDraftCard();
+
+  if (historyCount) {
+    historyCount.textContent = String(entries.length);
+    historyCount.classList.toggle("hidden", !entries.length);
+  }
 
   if (!entries.length) {
-    jobList.innerHTML = `<div class="job-item"><p class="job-item-name">${t("empty_jobs_title")}</p><p class="job-item-meta">${t("empty_jobs_meta")}</p></div>`;
+    historyList.innerHTML = `<div class="history-empty">${t("history_empty")}</div>`;
     return;
   }
 
   entries.forEach((job) => {
+    const hasDraft = Boolean(job.has_draft);
+    const canContinue = hasDraft || Boolean(job.segments?.length);
+    const statusBadges = hasDraft
+      ? `
+          <span class="status-pill" data-status="draft">${statusLabel("draft")}</span>
+          <span class="status-pill" data-status="${job.status}">${statusLabel(job.status)}</span>
+        `
+      : `<span class="status-pill" data-status="${job.status}">${statusLabel(job.status)}</span>`;
+    const metaLine = hasDraft
+      ? t("draft_auto_saved", { time: formatDraftTimestamp(job.draft_updated_at || job.created_at) })
+      : (job.message || "");
+
     const entry = document.createElement("div");
-    entry.className = "job-entry";
+    entry.className = "history-entry";
     entry.innerHTML = `
-      <button type="button" class="job-item${job.job_id === activeJobId ? " is-active" : ""}" data-job-id="${job.job_id}">
+      <button type="button" class="history-item" data-job-id="${job.job_id}">
         <div class="job-item-top">
           <p class="job-item-name">${job.original_name}</p>
           <div class="job-item-badges">
-            ${isDraftJob(job) ? `<span class="status-pill" data-status="queued">${statusLabel("draft")}</span>` : ""}
-            <span class="status-pill" data-status="${job.status}">${statusLabel(job.status)}</span>
+            ${statusBadges}
           </div>
         </div>
-        <p class="job-item-meta">${job.message || ""}</p>
-        <p class="job-item-meta">${job.has_draft ? t("draft_saved_at", { time: formatDraftTimestamp(job.draft_updated_at) }) : t("created_at", { time: formatDraftTimestamp(job.created_at) })}</p>
+        <p class="job-item-meta">${metaLine}</p>
+        <p class="job-item-meta">${t("created_at", { time: formatDraftTimestamp(job.created_at) })}</p>
       </button>
-      <button type="button" class="job-delete-button" data-delete-job="${job.job_id}" aria-label="${t("delete_job")}">${t("delete_job")}</button>
+      <div class="history-actions">
+        ${canContinue ? `<button type="button" class="secondary-button compact-button" data-continue-job="${job.job_id}">${t("history_restore")}</button>` : ""}
+        <button type="button" class="job-delete-button" data-delete-job="${job.job_id}" aria-label="${t("delete_job")}">${t("delete_job")}</button>
+      </div>
     `;
     entry.querySelector("[data-job-id]")?.addEventListener("click", () => {
       activeJobId = job.job_id;
       renderActiveJob();
+      setHistoryMenuOpen(false);
+    });
+    entry.querySelector("[data-continue-job]")?.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      try {
+        await openJobForEditing(job.job_id);
+      } catch (error) {
+        alert(error.message || t("draft_save_failed"));
+      }
     });
     entry.querySelector("[data-delete-job]")?.addEventListener("click", (event) => {
       event.stopPropagation();
       deleteJob(job.job_id);
     });
-    jobList.appendChild(entry);
+    historyList.appendChild(entry);
   });
 }
 
 function setDownloadLinks(job) {
   const urls = job.download_urls || {};
+  const saveUrls = job.save_urls || {};
   downloadBundleLink.href = `/api/jobs/${job.job_id}/download-all`;
+  downloadBundleLink.dataset.saveUrl = job.save_all_url || "";
   downloadSrtLink.href = urls.srt || "#";
+  downloadSrtLink.dataset.saveUrl = saveUrls.srt || "";
   downloadVttLink.href = urls.vtt || "#";
+  downloadVttLink.dataset.saveUrl = saveUrls.vtt || "";
   downloadTxtLink.href = urls.txt || "#";
+  downloadTxtLink.dataset.saveUrl = saveUrls.txt || "";
   downloadJsonLink.href = urls.json || "#";
+  downloadJsonLink.dataset.saveUrl = saveUrls.json || "";
   downloadMdLink.href = urls.md || "#";
+  downloadMdLink.dataset.saveUrl = saveUrls.md || "";
   downloadDocxLink.href = urls.docx || "#";
+  downloadDocxLink.dataset.saveUrl = saveUrls.docx || "";
   downloadAssLink.href = urls.ass || "#";
+  downloadAssLink.dataset.saveUrl = saveUrls.ass || "";
   downloadBilingualSrtLink.href = urls.srt_bilingual || "#";
+  downloadBilingualSrtLink.dataset.saveUrl = saveUrls.srt_bilingual || "";
   downloadBilingualTxtLink.href = urls.txt_bilingual || "#";
+  downloadBilingualTxtLink.dataset.saveUrl = saveUrls.txt_bilingual || "";
   downloadBilingualMdLink.href = urls.md_bilingual || "#";
+  downloadBilingualMdLink.dataset.saveUrl = saveUrls.md_bilingual || "";
   downloadBilingualDocxLink.href = urls.docx_bilingual || "#";
+  downloadBilingualDocxLink.dataset.saveUrl = saveUrls.docx_bilingual || "";
   downloadBilingualAssLink.href = urls.ass_bilingual || "#";
+  downloadBilingualAssLink.dataset.saveUrl = saveUrls.ass_bilingual || "";
   downloadBilingualSrtLink.classList.toggle("hidden", !urls.srt_bilingual);
   downloadBilingualTxtLink.classList.toggle("hidden", !urls.txt_bilingual);
   downloadBilingualMdLink.classList.toggle("hidden", !urls.md_bilingual);
@@ -1504,9 +2060,28 @@ function setDownloadLinks(job) {
   downloadGroup.classList.toggle("hidden", !hasDownloads);
 }
 
-function previewTextForSegment(segment) {
+async function saveDownloadToComputer(event) {
+  const link = event.target.closest("a[data-save-url]");
+  if (!link || !link.dataset.saveUrl) {
+    return;
+  }
+
+  event.preventDefault();
+  try {
+    const response = await fetch(link.dataset.saveUrl, { method: "POST" });
+    const payload = await response.json();
+    if (!response.ok) {
+      throw new Error(payload.detail || t("save_failed"));
+    }
+    setDraftState(t("save_done", { path: payload.path || payload.filename || payload.directory }));
+  } catch (error) {
+    alert(error.message || t("save_failed"));
+  }
+}
+
+function previewTextForSegment(segment, allowPlaceholder = true) {
   if (!segment) {
-    return t("subtitle_preview_default");
+    return allowPlaceholder ? t("subtitle_preview_default") : "";
   }
   const speaker = segment.speaker ? `[${segment.speaker}] ` : "";
   return `${speaker}${segment.text}`;
@@ -1535,6 +2110,17 @@ function extractSuspiciousTokens(text) {
   });
 }
 
+function cleanSuspiciousText(text) {
+  return normalizeSubtitleText(
+    String(text || "")
+      .replace(/�+/gu, "")
+      .replace(/([!?.,，。！？；：…])\1{1,}/gu, "$1")
+      .replace(/([A-Za-z\u0370-\u03FF])\1{3,}/gu, "$1$1")
+      .replace(/([^\s])([\/|])(?=[^\s])/gu, "$1 $2 ")
+      .replace(/\s{2,}/g, " "),
+  );
+}
+
 function splitSubtitleText(text) {
   const normalized = String(text || "").replace(/\s+/g, " ").trim();
   if (!normalized) {
@@ -1552,60 +2138,243 @@ function splitSubtitleText(text) {
   return [normalized];
 }
 
+function normalizeSubtitleText(text) {
+  return String(text || "")
+    .replace(/\r/g, "")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n[ \t]+/g, "\n")
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/\s+([,.;:!?，。！？；：])/g, "$1")
+    .replace(/([（([{【])\s+/g, "$1")
+    .replace(/\s+([）)\]}】])/g, "$1")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function subtitleTextLength(text) {
+  return normalizeSubtitleText(text).replace(/\s+/g, "").length;
+}
+
+function subtitleTokenCount(text) {
+  return normalizeSubtitleText(text)
+    .split(/[\s,.;:!?，。！？；：、“”"'`()[\]{}<>/\\|-]+/)
+    .map((token) => token.trim())
+    .filter(Boolean)
+    .length;
+}
+
+function segmentDuration(segment) {
+  return Math.max(0, Number(segment.end || 0) - Number(segment.start || 0));
+}
+
+function segmentGap(current, next) {
+  if (!current || !next) {
+    return Infinity;
+  }
+  return Number(next.start || 0) - Number(current.end || 0);
+}
+
+function segmentCps(segment) {
+  const duration = segmentDuration(segment);
+  const chars = subtitleTextLength(segment.text);
+  if (!duration || !chars) {
+    return 0;
+  }
+  return chars / duration;
+}
+
+function preferredDurationForText(text) {
+  const chars = subtitleTextLength(text);
+  if (!chars) {
+    return 0.6;
+  }
+  return Math.max(0.8, Math.min(6, chars / QC_LIMITS.idealCps));
+}
+
+function singleWordHoldLimit(text) {
+  return Math.min(2.8, Math.max(1.2, preferredDurationForText(text) + 0.55));
+}
+
+function isSingleWordHoldCandidate(segment) {
+  const text = normalizeSubtitleText(segment?.text);
+  if (!text || text.includes("\n")) {
+    return false;
+  }
+  const tokenCount = subtitleTokenCount(text);
+  const charCount = subtitleTextLength(text);
+  const duration = segmentDuration(segment);
+  return (
+    tokenCount > 0 &&
+    tokenCount <= QC_LIMITS.singleWordHoldTokenLimit &&
+    charCount <= QC_LIMITS.singleWordHoldCharLimit &&
+    duration > Math.max(QC_LIMITS.singleWordHoldDuration, singleWordHoldLimit(text))
+  );
+}
+
+function isMergeCandidate(segments, index) {
+  const current = segments[index];
+  const next = segments[index + 1];
+  if (!current || !next) {
+    return false;
+  }
+  const currentText = normalizeSubtitleText(current.text);
+  const nextText = normalizeSubtitleText(next.text);
+  if (!currentText || !nextText) {
+    return false;
+  }
+  if ((current.speaker || "") !== (next.speaker || "")) {
+    return false;
+  }
+  const gap = segmentGap(current, next);
+  const mergedLength = subtitleTextLength(`${currentText} ${nextText}`);
+  return (
+    gap <= QC_LIMITS.mergeGap &&
+    mergedLength <= QC_LIMITS.maxLineLength * 1.6 &&
+    (subtitleTextLength(currentText) <= QC_LIMITS.orphanChars || segmentDuration(current) < 0.65)
+  );
+}
+
+function splitLongSegmentSmart(segment) {
+  const text = normalizeSubtitleText(segment.text);
+  const duration = segmentDuration(segment);
+  if (!text || duration < 1.4) {
+    return null;
+  }
+
+  const punctuationMatch = text.match(/^(.{8,}?[\.,，。！？!?；;:：])\s+(.+)$/u);
+  let parts = punctuationMatch ? [punctuationMatch[1].trim(), punctuationMatch[2].trim()] : splitSubtitleText(text);
+  parts = parts.filter(Boolean);
+  if (parts.length < 2) {
+    return null;
+  }
+
+  const totalChars = parts.reduce((sum, part) => sum + subtitleTextLength(part), 0) || 1;
+  const firstRatio = subtitleTextLength(parts[0]) / totalChars;
+  const splitPoint = Number((Number(segment.start || 0) + duration * Math.min(0.72, Math.max(0.28, firstRatio))).toFixed(3));
+  return [
+    { ...segment, text: parts[0], end: splitPoint },
+    {
+      ...segment,
+      text: parts.slice(1).join(" "),
+      start: Number((splitPoint + QC_LIMITS.minGap).toFixed(3)),
+    },
+  ];
+}
+
+function addQualityIssue(issues, code, index, severity, detail) {
+  issues.push({
+    code,
+    index,
+    severity,
+    type: t(`qc_${code}`),
+    detail,
+  });
+}
+
+function isManualQualityIssue(issue) {
+  return issue?.code === "suspicious" || issue?.code === "merge_candidate";
+}
+
 function scanQualityIssues(segments) {
   const issues = [];
 
   segments.forEach((segment, index) => {
-    const text = String(segment.text || "").trim();
-    const duration = Math.max(0, Number(segment.end || 0) - Number(segment.start || 0));
+    const text = normalizeSubtitleText(segment.text);
+    const rawText = String(segment.text || "");
+    const cleanedNoiseText = cleanSuspiciousText(rawText);
+    const duration = segmentDuration(segment);
+    const cps = segmentCps({ ...segment, text });
     const lines = text.split("\n").map((line) => line.trim()).filter(Boolean);
     const longestLine = lines.reduce((max, line) => Math.max(max, line.length), 0);
+    const next = segments[index + 1];
 
     if (!text) {
-      issues.push({ index, severity: "error", type: t("qc_empty_subtitle"), detail: t("qc_empty_detail") });
+      addQualityIssue(issues, "empty_subtitle", index, "error", t("qc_empty_detail"));
+    }
+    if (rawText !== text) {
+      addQualityIssue(issues, "text_cleanup", index, "warn", t("qc_text_cleanup_detail"));
+    }
+    if (text && cleanedNoiseText !== text) {
+      addQualityIssue(issues, "text_noise", index, "warn", t("qc_text_noise_detail"));
     }
     if (text && duration < QC_LIMITS.shortDuration) {
-      issues.push({
+      addQualityIssue(
+        issues,
+        "short_duration",
         index,
-        severity: "warn",
-        type: t("qc_short_duration"),
-        detail: t("qc_short_detail", { duration: duration.toFixed(2), minimum: QC_LIMITS.shortDuration }),
-      });
+        "warn",
+        t("qc_short_detail", { duration: duration.toFixed(2), minimum: QC_LIMITS.shortDuration }),
+      );
+    }
+    if (text && isSingleWordHoldCandidate({ ...segment, text })) {
+      addQualityIssue(
+        issues,
+        "single_word_hold",
+        index,
+        "warn",
+        t("qc_single_word_hold_detail", {
+          tokens: subtitleTokenCount(text),
+          duration: duration.toFixed(2),
+          maximum: singleWordHoldLimit(text).toFixed(2),
+        }),
+      );
     }
     if (duration > QC_LIMITS.longDuration) {
-      issues.push({
+      addQualityIssue(issues, "long_duration", index, "warn", t("qc_long_detail", { duration: duration.toFixed(2) }));
+    }
+    if (text && cps > QC_LIMITS.maxCps) {
+      addQualityIssue(
+        issues,
+        "reading_speed",
         index,
-        severity: "warn",
-        type: t("qc_long_duration"),
-        detail: t("qc_long_detail", { duration: duration.toFixed(2) }),
-      });
+        "warn",
+        t("qc_reading_speed_detail", { cps: cps.toFixed(1), maximum: QC_LIMITS.maxCps }),
+      );
     }
     if (longestLine > QC_LIMITS.maxLineLength) {
-      issues.push({
+      addQualityIssue(
+        issues,
+        "line_too_long",
         index,
-        severity: "warn",
-        type: t("qc_line_too_long"),
-        detail: t("qc_line_detail", { length: longestLine, maximum: QC_LIMITS.maxLineLength }),
-      });
+        "warn",
+        t("qc_line_detail", { length: longestLine, maximum: QC_LIMITS.maxLineLength }),
+      );
+    }
+    if (isMergeCandidate(segments, index)) {
+      addQualityIssue(issues, "merge_candidate", index, "warn", t("qc_merge_candidate_detail"));
     }
     const suspiciousTokens = extractSuspiciousTokens(text);
     if (suspiciousTokens.length) {
-      issues.push({
+      addQualityIssue(
+        issues,
+        "suspicious",
         index,
-        severity: "warn",
-        type: t("qc_suspicious"),
-        detail: t("qc_suspicious_detail", { tokens: suspiciousTokens.slice(0, 3).join(" / ") }),
-      });
+        "warn",
+        t("qc_suspicious_detail", { tokens: suspiciousTokens.slice(0, 3).join(" / ") }),
+      );
     }
     if (index > 0) {
       const previous = segments[index - 1];
       if (Number(segment.start || 0) < Number(previous.end || 0) - 0.01) {
-        issues.push({
+        addQualityIssue(
+          issues,
+          "overlap",
           index,
-          severity: "error",
-          type: t("qc_overlap"),
-          detail: t("qc_overlap_detail", { duration: (Number(previous.end) - Number(segment.start)).toFixed(2) }),
-        });
+          "error",
+          t("qc_overlap_detail", { duration: (Number(previous.end) - Number(segment.start)).toFixed(2) }),
+        );
+      }
+    }
+    if (next) {
+      const gap = segmentGap(segment, next);
+      if (gap >= 0 && gap < QC_LIMITS.minGap) {
+        addQualityIssue(
+          issues,
+          "gap_too_tight",
+          index,
+          "warn",
+          t("qc_gap_too_tight_detail", { gap: gap.toFixed(2), minimum: QC_LIMITS.minGap.toFixed(2) }),
+        );
       }
     }
   });
@@ -1617,15 +2386,21 @@ function renderQualityPanel(segments) {
   const issues = scanQualityIssues(segments);
   const errors = issues.filter((issue) => issue.severity === "error").length;
   const warns = issues.length - errors;
+  const autoIssues = issues.filter((issue) => !isManualQualityIssue(issue));
+  const manualIssues = issues.filter(isManualQualityIssue);
 
   qcSummary.innerHTML = issues.length
     ? `
       <span class="qc-chip qc-chip-error">${t("qc_errors", { count: errors })}</span>
       <span class="qc-chip qc-chip-warn">${t("qc_warns", { count: warns })}</span>
+      <span class="qc-chip">${t("qc_auto_count", { count: autoIssues.length })}</span>
+      <span class="qc-chip">${t("qc_manual_count", { count: manualIssues.length })}</span>
       <span class="qc-chip">${t("qc_segments", { count: segments.length })}</span>
     `
     : `
       <span class="qc-chip qc-chip-pass">${t("qc_pass")}</span>
+      <span class="qc-chip">${t("qc_auto_count", { count: 0 })}</span>
+      <span class="qc-chip">${t("qc_manual_count", { count: 0 })}</span>
       <span class="qc-chip">${t("qc_segments", { count: segments.length })}</span>
     `;
 
@@ -1635,7 +2410,7 @@ function renderQualityPanel(segments) {
     return;
   }
 
-  issues.forEach((issue) => {
+  const buildQualityIssueButton = (issue) => {
     const item = document.createElement("button");
     item.type = "button";
     item.className = `qc-item qc-item-${issue.severity}`;
@@ -1655,65 +2430,388 @@ function renderQualityPanel(segments) {
         row.querySelector('[data-field="text"]')?.focus();
       }
     });
-    qcList.appendChild(item);
+    return item;
+  };
+
+  const groups = [
+    {
+      title: t("qc_auto_section"),
+      empty: t("qc_auto_empty"),
+      issues: autoIssues,
+      collapsible: true,
+    },
+    {
+      title: t("qc_manual_section"),
+      empty: t("qc_manual_empty"),
+      issues: manualIssues,
+    },
+  ];
+
+  const groupsShell = document.createElement("div");
+  groupsShell.className = "qc-groups";
+
+  groups.forEach((group) => {
+    const section = document.createElement("section");
+    section.className = "qc-group";
+    const collapsed = Boolean(group.collapsible && group.issues.length && qualityAutoGroupCollapsed);
+    section.classList.toggle("is-collapsed", collapsed);
+
+    if (group.collapsible) {
+      section.innerHTML = `
+        <button type="button" class="qc-group-head qc-group-toggle" aria-expanded="${String(!collapsed)}">
+          <h5 class="qc-group-title">${group.title}</h5>
+          <span class="qc-group-meta">
+            <span class="qc-chip">${group.issues.length}</span>
+            <span class="qc-group-caret" aria-hidden="true">▾</span>
+          </span>
+        </button>
+      `;
+    } else {
+      section.innerHTML = `
+        <div class="qc-group-head">
+          <h5 class="qc-group-title">${group.title}</h5>
+          <span class="qc-chip">${group.issues.length}</span>
+        </div>
+      `;
+    }
+    const list = document.createElement("div");
+    list.className = "qc-group-list";
+
+    if (!group.issues.length) {
+      const empty = document.createElement("div");
+      empty.className = "qc-empty";
+      empty.textContent = group.empty;
+      list.appendChild(empty);
+    } else {
+      group.issues.forEach((issue) => {
+        list.appendChild(buildQualityIssueButton(issue));
+      });
+    }
+
+    section.appendChild(list);
+    if (group.collapsible) {
+      const toggle = section.querySelector(".qc-group-toggle");
+      toggle?.addEventListener("click", () => {
+        qualityAutoGroupCollapsed = !qualityAutoGroupCollapsed;
+        section.classList.toggle("is-collapsed", qualityAutoGroupCollapsed);
+        toggle.setAttribute("aria-expanded", String(!qualityAutoGroupCollapsed));
+      });
+    }
+    groupsShell.appendChild(section);
   });
+
+  qcList.appendChild(groupsShell);
+}
+
+function roundTiming(value) {
+  return Number(Number(value || 0).toFixed(3));
+}
+
+function setSegmentTiming(segment, start, end) {
+  if (!segment) {
+    return false;
+  }
+  const nextStart = Math.max(0, roundTiming(start));
+  const nextEnd = Math.max(nextStart + 0.2, roundTiming(end));
+  const prevStart = Number(segment.start || 0);
+  const prevEnd = Number(segment.end || 0);
+  segment.start = nextStart;
+  segment.end = nextEnd;
+  return Math.abs(prevStart - nextStart) > 0.0005 || Math.abs(prevEnd - nextEnd) > 0.0005;
+}
+
+function shiftSegmentsForward(segments, startIndex, delta) {
+  const shift = Number(delta || 0);
+  if (!Number.isFinite(shift) || shift <= 0) {
+    return false;
+  }
+  let changed = false;
+  for (let index = startIndex; index < segments.length; index += 1) {
+    const segment = segments[index];
+    if (!segment) {
+      continue;
+    }
+    changed = setSegmentTiming(
+      segment,
+      Number(segment.start || 0) + shift,
+      Number(segment.end || 0) + shift,
+    ) || changed;
+  }
+  return changed;
 }
 
 function fixShortDuration(segments, index) {
   const segment = segments[index];
+  if (!segment) {
+    return false;
+  }
   const next = segments[index + 1];
   const previous = segments[index - 1];
+  const minDuration = Math.max(QC_LIMITS.shortDuration, preferredDurationForText(segment.text));
   let start = Number(segment.start || 0);
   let end = Number(segment.end || 0);
-  const minDuration = QC_LIMITS.shortDuration;
+  let changed = false;
 
+  if (previous) {
+    const minStart = Number(previous.end || 0) + QC_LIMITS.minGap;
+    if (start < minStart) {
+      const preserveDuration = Math.max(0.2, end - start);
+      start = minStart;
+      end = Math.max(end, start + preserveDuration);
+    }
+  }
+
+  const desiredEnd = start + minDuration;
   if (next) {
-    end = Math.min(next.start - 0.02, Math.max(end, start + minDuration));
-  } else {
-    end = Math.max(end, start + minDuration);
+    const maxEndWithoutShift = Number(next.start || 0) - QC_LIMITS.minGap;
+    if (desiredEnd > maxEndWithoutShift) {
+      changed = shiftSegmentsForward(segments, index + 1, desiredEnd - maxEndWithoutShift) || changed;
+    }
   }
-  if (end - start < minDuration && previous) {
-    start = Math.max(previous.end + 0.02, end - minDuration);
+
+  changed = setSegmentTiming(segment, start, Math.max(end, desiredEnd)) || changed;
+  return changed;
+}
+
+function fixSingleWordHold(segments, index) {
+  const segment = segments[index];
+  const next = segments[index + 1];
+  if (!segment) {
+    return false;
   }
-  segment.start = Math.max(0, Number(start.toFixed(3)));
-  segment.end = Math.max(segment.start + 0.2, Number(end.toFixed(3)));
+  const targetDuration = singleWordHoldLimit(segment.text);
+  const start = Number(segment.start || 0);
+  let desiredEnd = Number((start + targetDuration).toFixed(3));
+  if (next) {
+    desiredEnd = Math.min(desiredEnd, Number((Number(next.start || 0) - QC_LIMITS.minGap).toFixed(3)));
+  }
+  if (desiredEnd > start + 0.45 && desiredEnd < Number(segment.end || 0)) {
+    return setSegmentTiming(segment, start, desiredEnd);
+  }
+  return false;
 }
 
 function fixOverlap(segments, index) {
   const previous = segments[index - 1];
   const segment = segments[index];
   if (!previous || !segment) {
-    return;
+    return false;
   }
-  segment.start = Number((previous.end + 0.02).toFixed(3));
-  if (segment.end <= segment.start) {
-    segment.end = Number((segment.start + 0.4).toFixed(3));
+  const currentDuration = Math.max(0.4, segmentDuration(segment));
+  const next = segments[index + 1];
+  let nextStart = Number(previous.end || 0) + QC_LIMITS.minGap;
+  let nextEnd = nextStart + currentDuration;
+  let changed = false;
+
+  if (next) {
+    const maxEndWithoutShift = Number(next.start || 0) - QC_LIMITS.minGap;
+    if (nextEnd > maxEndWithoutShift) {
+      changed = shiftSegmentsForward(segments, index + 1, nextEnd - maxEndWithoutShift) || changed;
+    }
   }
+  changed = setSegmentTiming(segment, nextStart, nextEnd) || changed;
+  return changed;
 }
 
 function fixEmptyText(segment) {
+  const normalized = String(segment.text || "").trim();
+  if (normalized) {
+    return false;
+  }
   segment.text = "…";
+  return true;
+}
+
+function fixTextCleanup(segment) {
+  const cleaned = normalizeSubtitleText(segment.text);
+  if (cleaned === String(segment.text || "")) {
+    return false;
+  }
+  segment.text = cleaned;
+  return true;
+}
+
+function fixTextNoise(segment) {
+  const cleaned = cleanSuspiciousText(segment.text);
+  if (cleaned === String(segment.text || "")) {
+    return false;
+  }
+  segment.text = cleaned;
+  return true;
 }
 
 function fixLineLength(segment) {
   const parts = splitSubtitleText(segment.text);
   if (parts.length >= 2) {
-    segment.text = parts.slice(0, 2).join("\n");
+    const nextText = parts.slice(0, 2).join("\n");
+    if (nextText !== String(segment.text || "")) {
+      segment.text = nextText;
+      return true;
+    }
   }
+  return false;
 }
 
 function fixLongDuration(segments, index) {
   const segment = segments[index];
-  const parts = splitSubtitleText(segment.text);
-  if (parts.length < 2) {
+  const splitSegments = splitLongSegmentSmart(segment);
+  if (!splitSegments) {
     return false;
   }
-  const duration = Math.max(0.4, Number(segment.end || 0) - Number(segment.start || 0));
-  const midpoint = Number((segment.start + duration / 2).toFixed(3));
-  const first = { ...segment, text: parts[0], end: midpoint };
-  const second = { ...segment, text: parts[1], start: midpoint + 0.02 };
-  segments.splice(index, 1, first, second);
+  segments.splice(index, 1, ...splitSegments);
   return true;
+}
+
+function fixReadingSpeed(segments, index) {
+  const segment = segments[index];
+  if (!segment) {
+    return false;
+  }
+  const next = segments[index + 1];
+  const targetDuration = preferredDurationForText(segment.text);
+  const start = Number(segment.start || 0);
+  const currentEnd = Number(segment.end || 0);
+  const desiredEnd = start + targetDuration;
+  let changed = false;
+
+  if (next) {
+    const maxEndWithoutShift = Number(next.start || 0) - QC_LIMITS.minGap;
+    if (desiredEnd > maxEndWithoutShift) {
+      changed = shiftSegmentsForward(segments, index + 1, desiredEnd - maxEndWithoutShift) || changed;
+    }
+  }
+  if (desiredEnd <= currentEnd + 0.0005) {
+    return changed;
+  }
+  changed = setSegmentTiming(segment, start, Math.max(currentEnd, desiredEnd)) || changed;
+  return changed;
+}
+
+function fixTightGap(segments, index) {
+  const current = segments[index];
+  const next = segments[index + 1];
+  if (!current || !next) {
+    return false;
+  }
+  const gap = segmentGap(current, next);
+  if (!Number.isFinite(gap) || gap >= QC_LIMITS.minGap) {
+    return false;
+  }
+  let required = QC_LIMITS.minGap - gap;
+  let changed = false;
+
+  const currentDuration = segmentDuration(current);
+  const minDuration = Math.max(QC_LIMITS.shortDuration, preferredDurationForText(current.text) * 0.72);
+  const shrinkable = Math.max(0, currentDuration - minDuration);
+  if (shrinkable > 0) {
+    const shrink = Math.min(shrinkable, required);
+    changed = setSegmentTiming(current, Number(current.start || 0), Number(current.end || 0) - shrink) || changed;
+    required -= shrink;
+  }
+  if (required > 0) {
+    changed = shiftSegmentsForward(segments, index + 1, required) || changed;
+  }
+  return changed;
+}
+
+function fixMergeCandidate(segments, index) {
+  if (!isMergeCandidate(segments, index)) {
+    return false;
+  }
+  const current = segments[index];
+  const next = segments[index + 1];
+  segments[index] = {
+    ...current,
+    end: next.end,
+    text: normalizeSubtitleText(`${current.text} ${next.text}`),
+  };
+  segments.splice(index + 1, 1);
+  return true;
+}
+
+function runQualityFixPass(segments, includeContentFixes) {
+  let fixedCount = 0;
+
+  for (let index = 0; index < segments.length; index += 1) {
+    const segment = segments[index];
+    if (!segment) {
+      continue;
+    }
+
+    const rawText = String(segment.text || "");
+    const text = normalizeSubtitleText(rawText);
+    const duration = segmentDuration(segment);
+    const longestLine = text.split("\n").reduce((max, line) => Math.max(max, line.trim().length), 0);
+    const cps = segmentCps({ ...segment, text });
+
+    if (!text && includeContentFixes) {
+      if (fixEmptyText(segment)) {
+        fixedCount += 1;
+        continue;
+      }
+    }
+    if (rawText !== text) {
+      if (fixTextCleanup(segment)) {
+        fixedCount += 1;
+        continue;
+      }
+    }
+    if (includeContentFixes && text && cleanSuspiciousText(text) !== text) {
+      if (fixTextNoise(segment)) {
+        fixedCount += 1;
+        continue;
+      }
+    }
+    if (index > 0 && Number(segment.start || 0) < Number(segments[index - 1].end || 0) - 0.01) {
+      if (fixOverlap(segments, index)) {
+        fixedCount += 1;
+        continue;
+      }
+    }
+    if (includeContentFixes && QC_AUTO_MERGE_ENABLED && fixMergeCandidate(segments, index)) {
+      fixedCount += 1;
+      index = Math.max(-1, index - 2);
+      continue;
+    }
+    if (duration < QC_LIMITS.shortDuration) {
+      if (fixShortDuration(segments, index)) {
+        fixedCount += 1;
+        continue;
+      }
+    }
+    if (isSingleWordHoldCandidate({ ...segment, text })) {
+      if (fixSingleWordHold(segments, index)) {
+        fixedCount += 1;
+        continue;
+      }
+    }
+    if (cps > QC_LIMITS.maxCps) {
+      if (fixReadingSpeed(segments, index)) {
+        fixedCount += 1;
+        continue;
+      }
+    }
+    if (longestLine > QC_LIMITS.maxLineLength) {
+      if (fixLineLength(segment)) {
+        fixedCount += 1;
+        continue;
+      }
+    }
+    if (segmentGap(segment, segments[index + 1]) >= 0 && segmentGap(segment, segments[index + 1]) < QC_LIMITS.minGap) {
+      if (fixTightGap(segments, index)) {
+        fixedCount += 1;
+        continue;
+      }
+    }
+    if (segmentDuration(segment) > QC_LIMITS.longDuration || segmentCps(segment) > QC_LIMITS.maxCps + 3) {
+      if (fixLongDuration(segments, index)) {
+        fixedCount += 1;
+        index = Math.max(-1, index - 1);
+      }
+    }
+  }
+
+  return fixedCount;
 }
 
 function applyQualityFixes(mode = "all") {
@@ -1724,39 +2822,13 @@ function applyQualityFixes(mode = "all") {
 
   const segments = cloneSegments(originalSegments);
   let fixedCount = 0;
-  let manualCount = 0;
   const includeContentFixes = mode === "all";
 
-  for (let index = 0; index < segments.length; index += 1) {
-    const segment = segments[index];
-    const text = String(segment.text || "").trim();
-    const duration = Math.max(0, Number(segment.end || 0) - Number(segment.start || 0));
-    const longestLine = text.split("\n").reduce((max, line) => Math.max(max, line.trim().length), 0);
-
-    if (!text && includeContentFixes) {
-      fixEmptyText(segment);
-      fixedCount += 1;
-    }
-    if (index > 0 && Number(segment.start || 0) < Number(segments[index - 1].end || 0) - 0.01) {
-      fixOverlap(segments, index);
-      fixedCount += 1;
-    }
-    if (duration < QC_LIMITS.shortDuration) {
-      fixShortDuration(segments, index);
-      fixedCount += 1;
-    }
-    if (longestLine > QC_LIMITS.maxLineLength) {
-      fixLineLength(segment);
-      fixedCount += 1;
-    }
-    if ((Number(segment.end || 0) - Number(segment.start || 0)) > QC_LIMITS.longDuration) {
-      if (fixLongDuration(segments, index)) {
-        fixedCount += 1;
-        index -= 1;
-      }
-    }
-    if (extractSuspiciousTokens(segment.text).length) {
-      manualCount += 1;
+  for (let pass = 0; pass < 12; pass += 1) {
+    const changed = runQualityFixPass(segments, includeContentFixes);
+    fixedCount += changed;
+    if (!changed) {
+      break;
     }
   }
 
@@ -1768,18 +2840,20 @@ function applyQualityFixes(mode = "all") {
 
   pushHistory(segments);
   renderEditorFromState();
+  const remainingIssues = scanQualityIssues(currentSegments());
+  const manualCount = remainingIssues.filter(isManualQualityIssue).length;
   setDraftState(
-    manualCount
+    remainingIssues.length
       ? t(includeContentFixes ? "fix_all_done_manual" : "fix_format_done_manual", { count: fixedCount, manual: manualCount })
       : t(includeContentFixes ? "fix_all_done" : "fix_format_done", { count: fixedCount }),
   );
   scheduleDraftSave();
 }
 
-function updatePreviewVisual(segment = null) {
-  const style = assStyle.value;
-  subtitleOverlay.className = `subtitle-overlay ${style}`;
-  const text = previewTextForSegment(segment);
+function updatePreviewVisual(segment = null, options = {}) {
+  const { allowPlaceholder = true } = options;
+  subtitleOverlay.className = "subtitle-overlay";
+  const text = previewTextForSegment(segment, allowPlaceholder);
   subtitleOverlay.textContent = text;
 }
 
@@ -1800,7 +2874,13 @@ function syncPreviewEditor(segment = null) {
 }
 
 function findSegmentByTime(segments, time) {
-  return segments.findIndex((segment) => time >= segment.start && time <= segment.end);
+  return segments.findIndex((segment) => {
+    const start = Number(segment.start || 0);
+    const end = Number(segment.end || 0);
+    const duration = Math.max(0, end - start);
+    const entryDelay = Math.min(SUBTITLE_PREVIEW_ENTRY_DELAY, duration * 0.2);
+    return time >= start + entryDelay && time < end;
+  });
 }
 
 function buildEditorRow(segment, index) {
@@ -1835,8 +2915,13 @@ function renderEditorFromState() {
     activePreviewIndex = Math.max(0, segments.length - 1);
   }
   const activeSegment = segments[activePreviewIndex] || segments[0] || null;
-  updatePreviewVisual(activeSegment);
   syncPreviewEditor(activeSegment);
+  if (activePreviewMode === "video" || activePreviewMode === "audio") {
+    updateActiveRowByTime();
+  } else {
+    updatePreviewVisual(activeSegment);
+  }
+  drawWaveform();
 }
 
 function collectSegmentsFromEditor() {
@@ -1948,6 +3033,7 @@ function playSegment(index, loop = false) {
   }
   updatePreviewVisual(segment);
   syncPreviewEditor(segment);
+  drawWaveform();
 }
 
 function updateActiveRowByTime() {
@@ -1977,7 +3063,10 @@ function updateActiveRowByTime() {
     activePreviewIndex = index;
     updatePreviewVisual(segments[index]);
     syncPreviewEditor(segments[index]);
+  } else {
+    updatePreviewVisual(null, { allowPlaceholder: false });
   }
+  drawWaveform();
 }
 
 function renderEditor(job) {
@@ -2001,6 +3090,10 @@ function renderEditor(job) {
       ? t("draft_auto_saved", { time: formatDraftTimestamp(job.draft_updated_at) })
       : t("draft_hint")
   );
+  if (offsetSlider) {
+    offsetSlider.value = "0";
+    updateOffsetDisplay();
+  }
   renderEditorFromState();
 }
 
@@ -2240,10 +3333,47 @@ audioPlayer.addEventListener("seeking", () => {
   activePlaybackRange = null;
 });
 
-assStyle.addEventListener("change", () => {
-  updatePreviewVisual();
-  syncPresetHighlight();
+offsetSlider?.addEventListener("input", updateOffsetDisplay);
+offsetApplyButton?.addEventListener("click", applyGlobalOffset);
+offsetResetButton?.addEventListener("click", () => {
+  if (!offsetSlider) {
+    return;
+  }
+  offsetSlider.value = "0";
+  updateOffsetDisplay();
 });
+offsetNudgeButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    if (!offsetSlider) {
+      return;
+    }
+    const nextValue = Number(offsetSlider.value || 0) + Number(button.dataset.offsetNudge || 0);
+    offsetSlider.value = String(Math.max(Number(offsetSlider.min), Math.min(Number(offsetSlider.max), nextValue)));
+    updateOffsetDisplay();
+  });
+});
+waveformRefreshButton?.addEventListener("click", () => {
+  const job = jobs.get(activeJobId);
+  if (!job) {
+    resetWaveformState("waveform_empty");
+    return;
+  }
+  waveformJobId = null;
+  waveformData = null;
+  ensureWaveformDataForJob(job);
+});
+waveformCanvas?.addEventListener("click", (event) => {
+  const media = currentMediaElement();
+  const duration = waveformData?.duration || media?.duration || 0;
+  if (!media || !duration) {
+    return;
+  }
+  const rect = waveformCanvas.getBoundingClientRect();
+  const ratio = (event.clientX - rect.left) / rect.width;
+  media.currentTime = Math.max(0, Math.min(duration, ratio * duration));
+  updateActiveRowByTime();
+});
+window.addEventListener("resize", drawWaveform);
 
 [language, translateTo, modelSize, diarization, speakerCount, smartSplit].forEach((control) => {
   control.addEventListener("change", syncPresetHighlight);
@@ -2265,7 +3395,20 @@ uiLocale.addEventListener("change", () => {
   }
 });
 
-jobFilter.addEventListener("change", renderJobList);
+historyTrigger?.addEventListener("click", (event) => {
+  event.stopPropagation();
+  setHistoryMenuOpen(!historyMenuOpen);
+});
+
+document.addEventListener("click", (event) => {
+  if (!historyMenuOpen) {
+    return;
+  }
+  if (historyMenu?.contains(event.target) || historyTrigger?.contains(event.target)) {
+    return;
+  }
+  setHistoryMenuOpen(false);
+});
 
 pollToggleButton.addEventListener("click", () => {
   setPollPaused(!pollPaused);
@@ -2381,6 +3524,8 @@ editorList.addEventListener("keydown", (event) => {
   }
 });
 
+downloadGroup.addEventListener("click", saveDownloadToComputer);
+
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
   if (!activeFiles.length) {
@@ -2402,7 +3547,6 @@ form.addEventListener("submit", async (event) => {
       payload.append("diarization", String(diarization.value === "on"));
       payload.append("speaker_count", speakerCount.value);
       payload.append("smart_split", String(smartSplit.value === "on"));
-      payload.append("ass_style", assStyle.value);
 
       const response = await fetch("/api/jobs", {
         method: "POST",
@@ -2445,6 +3589,7 @@ document.addEventListener("keydown", (event) => {
 });
 
 updatePreviewVisual();
+updateOffsetDisplay();
 initializePreferences();
 syncPresetHighlight();
 setPreviewVisible(false);

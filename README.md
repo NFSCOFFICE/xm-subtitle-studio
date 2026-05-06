@@ -16,6 +16,7 @@ XM Subtitle Studio 面向需要稳定交付字幕的人，而不是普通上传�
 - 本地离线处理：媒体文件不需要上传到云端。
 - 音频视频统一入口：MP3、WAV、M4A、MP4、MOV、MKV 等文件走同一套流程。
 - 默认 high accuracy：默认使用 Whisper large-v3，优先保证识别质量。
+- 声音锁定时间轴：用 VAD/波形检测把字幕开始和结束压回真实有声区间，减少静音时仍显示字幕。
 - 交付友好：输出 SRT、VTT、TXT、JSON、ASS、Markdown、DOCX。
 - 时间轴可编辑：识别完成后可直接精修字幕片段、时间码和内容。
 - 任务可恢复：支持草稿、历史任务、产物下载和刷新后的任务恢复。
@@ -26,10 +27,10 @@ XM Subtitle Studio 面向需要稳定交付字幕的人，而不是普通上传�
 | --- | --- |
 | Recognition | Whisper 离线识别、自动语言检测、手动语言选择 |
 | Media | 支持音频和视频导入，视频可进入实时预览 |
-| Timeline | 行内编辑、增删段、合并、拆分、区间播放 |
+| Timeline | VAD 声音锁定、行内编辑、增删段、合并、拆分、区间播放 |
 | Delivery | SRT、VTT、TXT、JSON、ASS、Markdown、DOCX |
 | Quality Check | 扫描空字幕、时间重叠、过短过长、行长超限、可疑文本 |
-| Enhancement | 双语字幕、说话人标记、断句优化、综艺 ASS 模板 |
+| Enhancement | 双语字幕、说话人标记、断句优化 |
 | Workflow | 批量转写、暂停轮询、任务筛选、ZIP 下载全部产物 |
 | Desktop | macOS / Windows 桌面客户端封装 |
 
