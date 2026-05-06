@@ -59,7 +59,7 @@ chmod +x run.sh
 ./run.sh
 ```
 
-Windows one-command start:
+Windows one-command desktop start:
 
 ```bat
 git clone https://github.com/NFSCOFFICE/xm-subtitle-studio.git
@@ -67,15 +67,15 @@ cd xm-subtitle-studio
 start-win.bat
 ```
 
-`start-win.bat` creates `.venv`, installs Python dependencies, checks FFmpeg, downloads a local FFmpeg build into `vendor\ffmpeg` when needed, then starts the web app. The first recognition may download the selected Whisper model into `models\`.
+`start-win.bat` starts the desktop app directly. If `dist\XM Subtitle Studio\XM Subtitle Studio.exe` already exists, it launches that app. Otherwise it creates `.venv`, installs desktop dependencies, checks FFmpeg, downloads a local FFmpeg build into `vendor\ffmpeg` when needed, then opens the pywebview desktop window from source. The first recognition may download the selected Whisper model into `models\`.
 
-Open:
+For the web app, open:
 
 ```text
 http://127.0.0.1:8000
 ```
 
-The source startup scripts listen on `0.0.0.0`, so devices on the same local network can access:
+The web startup script listens on `0.0.0.0`, so devices on the same local network can access:
 
 ```text
 http://your-local-ip:8000
@@ -192,7 +192,7 @@ Automatic update checks can be added later through GitHub Releases or a public `
 ├── desktop_app.spec        # PyInstaller configuration
 ├── build-mac.command       # macOS desktop build script
 ├── build-win.bat           # Windows desktop build script
-├── start-win.bat           # Windows one-command web startup script
+├── start-win.bat           # Windows one-command desktop startup script
 ├── scripts/                # Build helpers, including model preparation
 ├── requirements.txt        # Runtime dependencies
 ├── requirements-desktop.txt

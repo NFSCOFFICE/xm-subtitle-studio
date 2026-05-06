@@ -2,6 +2,7 @@
 setlocal enabledelayedexpansion
 cd /d %~dp0
 
+set "APP_EXE=%CD%\dist\XM Subtitle Studio\XM Subtitle Studio.exe"
 set "FFMPEG_DIR=%CD%\vendor\ffmpeg"
 set "FFMPEG_BIN=%FFMPEG_DIR%\bin"
 set "FFMPEG_EXE=%FFMPEG_BIN%\ffmpeg.exe"
@@ -16,6 +17,12 @@ if errorlevel 1 (
   exit /b 1
 )
 
+if exist "%APP_EXE%" (
+  echo Starting XM Subtitle Studio desktop app...
+  start "" "%APP_EXE%"
+  exit /b 0
+)
+
 if not exist ".venv\Scripts\python.exe" (
   echo Creating Python virtual environment...
   py -m venv .venv
@@ -25,7 +32,7 @@ call .venv\Scripts\activate.bat
 
 echo Installing Python dependencies...
 python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
+python -m pip install -r requirements-desktop.txt
 
 where ffmpeg >nul 2>nul
 set "HAS_SYSTEM_FFMPEG=%ERRORLEVEL%"
@@ -71,10 +78,14 @@ if errorlevel 1 (
 )
 
 echo.
-echo XM Subtitle Studio is starting...
-echo Open http://127.0.0.1:8000 if the browser does not open automatically.
-echo LAN sharing is enabled on port 8000. Allow Python through Windows Firewall if prompted.
+echo XM Subtitle Studio desktop app is starting...
+echo This command opens the native desktop window, not the browser page.
 echo.
 
-start "" http://127.0.0.1:8000
-python -m uvicorn app:app --host 0.0.0.0 --port 8000
+python desktop_app.py
+if errorlevel 1 (
+  echo.
+  echo XM Subtitle Studio failed to start. Keep this window open and send the error above.
+  pause
+  exit /b 1
+)

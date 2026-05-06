@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-import fcntl
 import multiprocessing
 import os
 import socket
+import sys
 import threading
 import time
 from pathlib import Path
@@ -19,14 +19,34 @@ def find_free_port() -> int:
         return int(sock.getsockname()[1])
 
 
+def app_support_dir() -> Path:
+    if sys.platform == "darwin":
+        return Path.home() / "Library" / "Application Support" / "XM Subtitle Studio"
+    if sys.platform.startswith("win"):
+        root = os.environ.get("LOCALAPPDATA") or os.environ.get("APPDATA")
+        if root:
+            return Path(root) / "XM Subtitle Studio"
+    return Path.home() / ".xm-subtitle-studio"
+
+
 def acquire_single_instance_lock():
-    lock_dir = Path.home() / "Library" / "Application Support" / "XM Subtitle Studio"
+    lock_dir = app_support_dir()
     lock_dir.mkdir(parents=True, exist_ok=True)
     lock_file = (lock_dir / "app.lock").open("w")
-    try:
-        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-    except BlockingIOError:
-        return None
+    if sys.platform.startswith("win"):
+        import msvcrt
+
+        try:
+            msvcrt.locking(lock_file.fileno(), msvcrt.LK_NBLCK, 1)
+        except OSError:
+            return None
+    else:
+        import fcntl
+
+        try:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            return None
     lock_file.write(str(os.getpid()))
     lock_file.flush()
     return lock_file
