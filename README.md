@@ -176,7 +176,8 @@ Automatic update checks can be added later through GitHub Releases or a public `
 - Desktop build scripts pre-download `faster-whisper-large-v3` and include it in the packaged app.
 - Windows startup/build scripts can download FFmpeg into `vendor\ffmpeg` automatically if FFmpeg is not already installed.
 - After models are downloaded, recognition can run offline.
-- Translation and speaker features may download additional local models on first use.
+- Translation features may download additional local models on first use.
+- Speaker diarization is optional because it depends on `resemblyzer` / `webrtcvad`, which may require Visual C++ Build Tools on Windows. Install it only when needed with `python -m pip install -r requirements-speaker.txt`.
 - `large-v3` gives better accuracy, but first download and transcription are slower.
 - Use a smaller model in the UI if speed matters more than accuracy.
 - To protect first words, transcription adds a temporary `0.35s` lead-in silence and subtracts it from generated subtitle timecodes. Exports stay aligned to the original media.
@@ -196,6 +197,7 @@ Automatic update checks can be added later through GitHub Releases or a public `
 ├── scripts/                # Build helpers, including model preparation
 ├── requirements.txt        # Runtime dependencies
 ├── requirements-desktop.txt
+├── requirements-speaker.txt # Optional speaker diarization dependency
 ├── uploads/                # Local imported media, ignored by git
 ├── outputs/                # Generated subtitles/docs, ignored by git
 ├── models/                 # Local model cache, ignored by git

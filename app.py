@@ -25,9 +25,14 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from faster_whisper import WhisperModel
 from docx import Document
-from resemblyzer import VoiceEncoder, preprocess_wav
 from sklearn.cluster import AgglomerativeClustering
 from transformers import pipeline
+
+try:
+    from resemblyzer import VoiceEncoder, preprocess_wav
+except Exception:
+    VoiceEncoder = None
+    preprocess_wav = None
 
 
 SOURCE_DIR = Path(__file__).resolve().parent
@@ -130,7 +135,7 @@ _model_cache: Dict[str, WhisperModel] = {}
 _model_lock = Lock()
 _translator_cache: Dict[str, object] = {}
 _translator_lock = Lock()
-_speaker_encoder: Optional[VoiceEncoder] = None
+_speaker_encoder: Optional[object] = None
 _speaker_encoder_lock = Lock()
 
 TRANSLATION_MODELS = {
@@ -954,8 +959,13 @@ def probe_auto_language(model: WhisperModel, audio_path: Path) -> tuple[Optional
         shutil.rmtree(temp_dir, ignore_errors=True)
 
 
-def load_speaker_encoder() -> VoiceEncoder:
+def load_speaker_encoder() -> object:
     global _speaker_encoder
+    if VoiceEncoder is None:
+        raise RuntimeError(
+            "Speaker diarization requires optional dependencies. "
+            "Install them with: python -m pip install -r requirements-speaker.txt"
+        )
     with _speaker_encoder_lock:
         if _speaker_encoder is None:
             _speaker_encoder = VoiceEncoder()
@@ -1027,6 +1037,11 @@ def apply_speaker_diarization(
     usable_segments = [segment for segment in segments if (segment["end"] - segment["start"]) >= 0.8]
     if len(usable_segments) < 2:
         return segments
+    if preprocess_wav is None:
+        raise RuntimeError(
+            "Speaker diarization requires optional dependencies. "
+            "Install them with: python -m pip install -r requirements-speaker.txt"
+        )
 
     wav_path = convert_audio_for_diarization(audio_path)
     try:

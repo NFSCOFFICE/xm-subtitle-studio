@@ -9,6 +9,7 @@ set "FFMPEG_EXE=%FFMPEG_BIN%\ffmpeg.exe"
 set "FFPROBE_EXE=%FFMPEG_BIN%\ffprobe.exe"
 set "FFMPEG_ZIP=%TEMP%\xm-ffmpeg.zip"
 set "FFMPEG_URL=https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
+set "FFMPEG_FALLBACK_URL=https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip"
 
 where py >nul 2>nul
 if errorlevel 1 (
@@ -44,7 +45,10 @@ if not exist "%FFMPEG_EXE%" (
     echo FFmpeg not found. Downloading local FFmpeg package...
     powershell -NoProfile -ExecutionPolicy Bypass -Command ^
       "$ErrorActionPreference='Stop';" ^
-      "Invoke-WebRequest -Uri '%FFMPEG_URL%' -OutFile '%FFMPEG_ZIP%';" ^
+      "$urls=@('%FFMPEG_URL%','%FFMPEG_FALLBACK_URL%');" ^
+      "$ok=$false;" ^
+      "foreach($url in $urls){try{Write-Host ('Downloading FFmpeg from ' + $url); Invoke-WebRequest -Uri $url -OutFile '%FFMPEG_ZIP%' -UseBasicParsing; $ok=$true; break}catch{Write-Host ('Download failed: ' + $_.Exception.Message)}};" ^
+      "if(-not $ok){throw 'Unable to download FFmpeg from all mirrors.'};" ^
       "New-Item -ItemType Directory -Force -Path '%FFMPEG_DIR%' | Out-Null;" ^
       "$tmp = Join-Path $env:TEMP ('xm-ffmpeg-' + [guid]::NewGuid());" ^
       "Expand-Archive -Path '%FFMPEG_ZIP%' -DestinationPath $tmp -Force;" ^
