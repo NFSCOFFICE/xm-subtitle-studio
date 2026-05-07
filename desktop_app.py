@@ -9,9 +9,34 @@ import time
 from pathlib import Path
 
 import uvicorn
-import webview
 
 SERVER_ERROR: Exception | None = None
+
+
+def configure_windows_rendering() -> None:
+    if not sys.platform.startswith("win"):
+        return
+
+    # Qt WebEngine can flicker on some Windows GPU/driver combinations when a
+    # page uses gradients, blur and video layers. Force a conservative rendering
+    # path before pywebview imports Qt.
+    os.environ.setdefault("QT_OPENGL", "software")
+    os.environ.setdefault("QT_ANGLE_PLATFORM", "warp")
+    os.environ.setdefault("QTWEBENGINE_DISABLE_GPU", "1")
+
+    flags = [
+        "--disable-gpu",
+        "--disable-gpu-compositing",
+        "--disable-features=CalculateNativeWinOcclusion",
+    ]
+    existing = os.environ.get("QTWEBENGINE_CHROMIUM_FLAGS", "").strip()
+    merged = " ".join([existing, *flags]).strip()
+    os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = merged
+
+
+configure_windows_rendering()
+
+import webview
 
 
 def find_free_port() -> int:
