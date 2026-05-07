@@ -11,6 +11,8 @@ from pathlib import Path
 import uvicorn
 import webview
 
+SERVER_ERROR: Exception | None = None
+
 
 def find_free_port() -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
@@ -53,22 +55,29 @@ def acquire_single_instance_lock():
 
 
 def run_server(port: int) -> None:
-    from app import app
+    global SERVER_ERROR
+    try:
+        from app import app
 
-    config = uvicorn.Config(
-        app,
-        host="127.0.0.1",
-        port=port,
-        log_level="warning",
-        access_log=False,
-    )
-    server = uvicorn.Server(config)
-    server.run()
+        config = uvicorn.Config(
+            app,
+            host="127.0.0.1",
+            port=port,
+            log_level="warning",
+            access_log=False,
+        )
+        server = uvicorn.Server(config)
+        server.run()
+    except Exception as exc:
+        SERVER_ERROR = exc
+        raise
 
 
 def wait_for_server(port: int, timeout: float = 15.0) -> None:
     deadline = time.time() + timeout
     while time.time() < deadline:
+        if SERVER_ERROR is not None:
+            raise RuntimeError(f"Desktop server failed to start: {SERVER_ERROR}") from SERVER_ERROR
         try:
             with socket.create_connection(("127.0.0.1", port), timeout=0.5):
                 return
