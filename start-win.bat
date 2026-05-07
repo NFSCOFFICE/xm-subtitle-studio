@@ -51,7 +51,7 @@ if errorlevel 1 (
   pause
   exit /b 1
 )
-python -m pip install -r requirements-desktop.txt
+python -m pip install -r requirements-desktop-win.txt
 if errorlevel 1 (
   echo Failed to install Python dependencies. Keep this window open and send the error above.
   pause

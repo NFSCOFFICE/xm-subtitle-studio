@@ -102,7 +102,13 @@ def main() -> None:
         min_size=(1280, 820),
         text_select=True,
     )
-    webview.start()
+    if sys.platform.startswith("win"):
+        # Avoid the WinForms/pythonnet backend in frozen Windows builds. That
+        # backend can fail to resolve Python.Runtime.dll after PyInstaller
+        # collection; Qt is self-contained through PySide6.
+        webview.start(gui="qt")
+    else:
+        webview.start()
     lock_file.close()
 
 

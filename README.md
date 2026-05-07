@@ -92,7 +92,7 @@ Allow Python through macOS or Windows Firewall if the system prompts you. The pa
 
 ## Desktop App
 
-The desktop client wraps the FastAPI backend and the web UI with `pywebview`, then packages it with PyInstaller.
+The desktop client wraps the FastAPI backend and the web UI with `pywebview`, then packages it with PyInstaller. Windows builds install the extra `requirements-desktop-win.txt` Qt backend to avoid WinForms / pythonnet runtime issues in frozen apps.
 
 When release assets are available, users can download ready-to-use builds from:
 
@@ -204,6 +204,7 @@ Automatic update checks can be added later through GitHub Releases or a public `
 ├── scripts/                # Build helpers, including model preparation
 ├── requirements.txt        # Runtime dependencies
 ├── requirements-desktop.txt
+├── requirements-desktop-win.txt # Windows desktop Qt backend
 ├── requirements-speaker.txt # Optional speaker diarization dependency
 ├── uploads/                # Local imported media, ignored by git
 ├── outputs/                # Generated subtitles/docs, ignored by git

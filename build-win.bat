@@ -27,7 +27,7 @@ if errorlevel 1 (
   echo Failed to upgrade pip.
   exit /b 1
 )
-python -m pip install -r requirements-desktop.txt
+python -m pip install -r requirements-desktop-win.txt
 if errorlevel 1 (
   echo Failed to install Python dependencies.
   exit /b 1

@@ -20,6 +20,23 @@ hiddenimports = [
     "uvicorn.protocols.websockets.auto",
     "uvicorn.lifespan.on",
 ]
+if sys.platform.startswith("win"):
+    hiddenimports += [
+        "PySide6",
+        "PySide6.QtCore",
+        "PySide6.QtGui",
+        "PySide6.QtNetwork",
+        "PySide6.QtWebChannel",
+        "PySide6.QtWebEngineCore",
+        "PySide6.QtWebEngineWidgets",
+        "PySide6.QtWidgets",
+    ]
+
+excludes = [
+    "clr",
+    "pythonnet",
+    "webview.platforms.winforms",
+]
 
 a = Analysis(
     ["desktop_app.py"],
@@ -30,7 +47,7 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    excludes=excludes,
     noarchive=False,
 )
 pyz = PYZ(a.pure)
