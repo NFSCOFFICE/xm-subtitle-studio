@@ -80,11 +80,6 @@ if errorlevel 1 (
   exit /b 1
 )
 
-python scripts\ensure_large_v3_model.py
-if errorlevel 1 (
-  echo Failed to prepare Whisper large-v3 model.
-  exit /b 1
-)
 pyinstaller --noconfirm desktop_app.spec
 if errorlevel 1 (
   echo PyInstaller build failed.

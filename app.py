@@ -43,11 +43,23 @@ else:
     APP_DIR = SOURCE_DIR
     RESOURCE_DIR = SOURCE_DIR
 
+
+def user_data_dir() -> Path:
+    if sys.platform == "darwin":
+        return Path.home() / "Library" / "Application Support" / "XM Subtitle Studio"
+    if sys.platform.startswith("win"):
+        root = os.environ.get("LOCALAPPDATA") or os.environ.get("APPDATA")
+        if root:
+            return Path(root) / "XM Subtitle Studio"
+    return Path.home() / ".xm-subtitle-studio"
+
+
+WRITABLE_DIR = user_data_dir() if getattr(sys, "frozen", False) else APP_DIR
 STATIC_DIR = RESOURCE_DIR / "static"
-UPLOAD_DIR = APP_DIR / "uploads"
-OUTPUT_DIR = APP_DIR / "outputs"
-MODEL_DIR = RESOURCE_DIR / "models" if (RESOURCE_DIR / "models").exists() else APP_DIR / "models"
-DATA_DIR = APP_DIR / "data"
+UPLOAD_DIR = WRITABLE_DIR / "uploads"
+OUTPUT_DIR = WRITABLE_DIR / "outputs"
+MODEL_DIR = RESOURCE_DIR / "models" if (RESOURCE_DIR / "models").exists() else WRITABLE_DIR / "models"
+DATA_DIR = WRITABLE_DIR / "data"
 JOB_STORE_PATH = DATA_DIR / "jobs.json"
 VENDOR_FFMPEG_BIN_CANDIDATES = (
     APP_DIR / "vendor" / "ffmpeg" / "bin",

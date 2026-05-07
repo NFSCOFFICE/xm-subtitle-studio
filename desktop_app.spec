@@ -12,9 +12,6 @@ datas = [
 datas += collect_data_files("faster_whisper", includes=["assets/*"])
 if (ROOT / "vendor").exists():
     datas.append((str(ROOT / "vendor"), "vendor"))
-large_v3_model = ROOT / "models" / "models--Systran--faster-whisper-large-v3"
-if large_v3_model.exists():
-    datas.append((str(large_v3_model), "models/models--Systran--faster-whisper-large-v3"))
 
 hiddenimports = [
     "uvicorn.logging",

@@ -74,7 +74,7 @@ cd xm-subtitle-studio
 start-win.bat
 ```
 
-`start-win.bat` starts the desktop app directly. If `dist\XM Subtitle Studio\XM Subtitle Studio.exe` already exists, it launches that app. Otherwise it creates `.venv`, installs desktop dependencies, checks FFmpeg, downloads a local FFmpeg build into `vendor\ffmpeg` when needed, then opens the pywebview desktop window from source. The first recognition may download the selected Whisper model into `models\`.
+`start-win.bat` starts the desktop app directly. If `dist\XM Subtitle Studio\XM Subtitle Studio.exe` already exists, it launches that app. Otherwise it creates `.venv`, installs desktop dependencies, checks FFmpeg, downloads a local FFmpeg build into `vendor\ffmpeg` when needed, then opens the pywebview desktop window from source. The first recognition downloads the selected Whisper model into the local user data folder.
 
 For the web app, open:
 
@@ -105,7 +105,7 @@ chmod +x build-mac.command
 ./build-mac.command
 ```
 
-The macOS build script installs desktop dependencies, copies local FFmpeg / FFprobe into the app package, downloads `faster-whisper-large-v3` into `models/`, and packages the model with the app.
+The macOS build script installs desktop dependencies and copies local FFmpeg / FFprobe into the app package. Whisper models are not bundled; the first recognition downloads the selected model into the local user data folder.
 
 Output:
 
@@ -125,7 +125,7 @@ cd xm-subtitle-studio
 build-win.bat
 ```
 
-The Windows build script installs desktop dependencies, downloads FFmpeg / FFprobe when needed, downloads `faster-whisper-large-v3` into `models\`, and packages the model with the app.
+The Windows build script installs desktop dependencies and downloads FFmpeg / FFprobe when needed. Whisper models are not bundled; the first recognition downloads the selected model into the local user data folder.
 
 Output:
 
@@ -180,7 +180,7 @@ Automatic update checks can be added later through GitHub Releases or a public `
 ## Offline Model Notes
 
 - Source startup scripts download Whisper models into `models/` on first use.
-- Desktop build scripts pre-download `faster-whisper-large-v3` and include it in the packaged app.
+- Desktop apps do not bundle Whisper models by default. On first recognition, the selected model downloads into the local user data folder.
 - Windows startup/build scripts can download FFmpeg into `vendor\ffmpeg` automatically if FFmpeg is not already installed.
 - After models are downloaded, recognition can run offline.
 - Translation features may download additional local models on first use.
