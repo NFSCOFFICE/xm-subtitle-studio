@@ -10,11 +10,32 @@ set "FFMPEG_ZIP=%TEMP%\xm-ffmpeg.zip"
 set "FFMPEG_URL=https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
 set "FFMPEG_FALLBACK_URL=https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip"
 
+python -c "import sys; raise SystemExit(0 if (3, 10) <= sys.version_info[:2] <= (3, 12) else 1)"
+if errorlevel 1 (
+  echo Python 3.10, 3.11, or 3.12 is required. Python 3.13 or newer is not supported by the current local AI stack.
+  exit /b 1
+)
+
 python -m venv .venv-desktop
+if errorlevel 1 (
+  echo Failed to create Python virtual environment.
+  exit /b 1
+)
 call .venv-desktop\Scripts\activate.bat
 python -m pip install --upgrade pip
+if errorlevel 1 (
+  echo Failed to upgrade pip.
+  exit /b 1
+)
 python -m pip install -r requirements-desktop.txt
+if errorlevel 1 (
+  echo Failed to install Python dependencies.
+  exit /b 1
+)
 python -m pip uninstall -y typing
+if errorlevel 1 (
+  echo Skipping typing uninstall warning.
+)
 
 where ffmpeg >nul 2>nul
 set "HAS_SYSTEM_FFMPEG=%ERRORLEVEL%"
@@ -60,7 +81,15 @@ if errorlevel 1 (
 )
 
 python scripts\ensure_large_v3_model.py
+if errorlevel 1 (
+  echo Failed to prepare Whisper large-v3 model.
+  exit /b 1
+)
 pyinstaller --noconfirm desktop_app.spec
+if errorlevel 1 (
+  echo PyInstaller build failed.
+  exit /b 1
+)
 
 echo.
 echo Windows desktop build ready:

@@ -18,6 +18,13 @@ if errorlevel 1 (
   exit /b 1
 )
 
+py -c "import sys; raise SystemExit(0 if (3, 10) <= sys.version_info[:2] <= (3, 12) else 1)"
+if errorlevel 1 (
+  echo Python 3.10, 3.11, or 3.12 is required. Python 3.13 or newer is not supported by the current local AI stack.
+  pause
+  exit /b 1
+)
+
 if exist "%APP_EXE%" (
   echo Starting XM Subtitle Studio desktop app...
   start "" "%APP_EXE%"
@@ -30,10 +37,26 @@ if not exist ".venv\Scripts\python.exe" (
 )
 
 call .venv\Scripts\activate.bat
+python -c "import sys; raise SystemExit(0 if (3, 10) <= sys.version_info[:2] <= (3, 12) else 1)"
+if errorlevel 1 (
+  echo The existing .venv uses an unsupported Python version. Delete .venv and rerun this script with Python 3.10, 3.11, or 3.12.
+  pause
+  exit /b 1
+)
 
 echo Installing Python dependencies...
 python -m pip install --upgrade pip
+if errorlevel 1 (
+  echo Failed to upgrade pip.
+  pause
+  exit /b 1
+)
 python -m pip install -r requirements-desktop.txt
+if errorlevel 1 (
+  echo Failed to install Python dependencies. Keep this window open and send the error above.
+  pause
+  exit /b 1
+)
 
 where ffmpeg >nul 2>nul
 set "HAS_SYSTEM_FFMPEG=%ERRORLEVEL%"

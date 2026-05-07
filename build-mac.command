@@ -3,6 +3,13 @@ set -euo pipefail
 
 cd "$(dirname "$0")"
 
+python3 - <<'PY'
+import sys
+
+if not ((3, 10) <= sys.version_info[:2] <= (3, 12)):
+    raise SystemExit("Python 3.10, 3.11, or 3.12 is required. Python 3.13 or newer is not supported by the current local AI stack.")
+PY
+
 if command -v ffmpeg >/dev/null 2>&1 && command -v ffprobe >/dev/null 2>&1; then
   mkdir -p vendor/ffmpeg/bin
   cp -fL "$(command -v ffmpeg)" vendor/ffmpeg/bin/ffmpeg

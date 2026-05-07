@@ -44,6 +44,14 @@ Export: SRT / VTT / TXT / JSON / ASS / Markdown / DOCX
 
 ## Quick Start
 
+Python requirement:
+
+```text
+Python 3.10 / 3.11 / 3.12
+```
+
+Python 3.13 or newer is not supported by the current local AI stack because pinned Torch wheels are not available for it.
+
 Clone the public repository:
 
 ```bash
@@ -54,7 +62,6 @@ cd xm-subtitle-studio
 Run the web app on macOS / Linux:
 
 ```bash
-python3 -m pip install -r requirements.txt
 chmod +x run.sh
 ./run.sh
 ```
