@@ -105,6 +105,36 @@ for fallback_bin in (
     prepend_path_if_exists(fallback_bin)
 
 
+def _ffmpeg_install_hint() -> str:
+    if sys.platform.startswith("win"):
+        return (
+            "Install options:\n"
+            "  - Run start-win.bat once to auto-download FFmpeg into vendor/ffmpeg/\n"
+            "  - Or install system-wide: winget install Gyan.FFmpeg"
+        )
+    if sys.platform == "darwin":
+        return "Install via Homebrew: brew install ffmpeg"
+    return "Install ffmpeg via your system package manager (e.g., apt install ffmpeg)."
+
+
+def resolve_ffmpeg_binary(name: str) -> str:
+    """Return absolute path to ffmpeg/ffprobe, searching vendor dirs then system PATH."""
+    exe_name = f"{name}.exe" if sys.platform.startswith("win") else name
+    for vendor_bin in VENDOR_FFMPEG_BIN_CANDIDATES:
+        candidate = vendor_bin / exe_name
+        if candidate.exists():
+            return str(candidate)
+    found = shutil.which(name)
+    if found:
+        return found
+    checked = ", ".join(str(d / exe_name) for d in VENDOR_FFMPEG_BIN_CANDIDATES)
+    raise RuntimeError(
+        f"{name} is required but was not found.\n"
+        f"Checked: {checked} and system PATH.\n"
+        f"{_ffmpeg_install_hint()}"
+    )
+
+
 @dataclass
 class JobState:
     job_id: str
@@ -274,26 +304,21 @@ def utc_now() -> str:
 
 
 def get_audio_duration(file_path: Path) -> float:
-    try:
-        result = subprocess.run(
-            [
-                "ffprobe",
-                "-v",
-                "error",
-                "-show_entries",
-                "format=duration",
-                "-of",
-                "json",
-                str(file_path),
-            ],
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-    except FileNotFoundError as exc:
-        raise RuntimeError(
-            "ffprobe is required but was not found. Please install FFmpeg or place ffprobe under vendor/ffmpeg/bin."
-        ) from exc
+    result = subprocess.run(
+        [
+            resolve_ffmpeg_binary("ffprobe"),
+            "-v",
+            "error",
+            "-show_entries",
+            "format=duration",
+            "-of",
+            "json",
+            str(file_path),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
     payload = json.loads(result.stdout or "{}")
     duration = payload.get("format", {}).get("duration", 0)
     return float(duration or 0)
@@ -308,7 +333,7 @@ def prepare_audio_for_transcription(file_path: Path) -> tuple[Path, float, Optio
     padded_path = temp_dir / "lead-padded.wav"
     subprocess.run(
         [
-            "ffmpeg",
+            resolve_ffmpeg_binary("ffmpeg"),
             "-y",
             "-f",
             "lavfi",
@@ -932,7 +957,7 @@ def probe_auto_language(model: WhisperModel, audio_path: Path) -> tuple[Optional
     try:
         subprocess.run(
             [
-                "ffmpeg",
+                resolve_ffmpeg_binary("ffmpeg"),
                 "-y",
                 "-i",
                 str(audio_path),
@@ -1026,7 +1051,7 @@ def convert_audio_for_diarization(audio_path: Path) -> Path:
     wav_path = temp_dir / f"{audio_path.stem}.wav"
     subprocess.run(
         [
-            "ffmpeg",
+            resolve_ffmpeg_binary("ffmpeg"),
             "-y",
             "-i",
             str(audio_path),
