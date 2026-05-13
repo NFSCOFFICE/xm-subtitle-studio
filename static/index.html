@@ -6,6 +6,14 @@
     <title>XM Subtitle Studio</title>
     <link rel="icon" href="/favicon.ico" sizes="any" />
     <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
+    <script>
+      // Tag the document for Windows so CSS can drop GPU-expensive effects
+      // (backdrop-filter, transition:all) under Qt WebEngine's software raster.
+      // Runs before the stylesheet to avoid a flash of blur on Windows.
+      if (/Windows/i.test(navigator.userAgent)) {
+        document.documentElement.classList.add("win-software-raster");
+      }
+    </script>
     <link rel="stylesheet" href="/static/styles.css" />
   </head>
   <body>
