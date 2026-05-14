@@ -19,7 +19,7 @@ from typing import Dict, List, Optional
 
 import numpy as np
 import librosa
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import Body, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -62,6 +62,7 @@ OUTPUT_DIR = WRITABLE_DIR / "outputs"
 MODEL_DIR = RESOURCE_DIR / "models" if (RESOURCE_DIR / "models").exists() else WRITABLE_DIR / "models"
 DATA_DIR = WRITABLE_DIR / "data"
 JOB_STORE_PATH = DATA_DIR / "jobs.json"
+SETTINGS_PATH = DATA_DIR / "settings.json"
 VENDOR_FFMPEG_BIN_CANDIDATES = (
     APP_DIR / "vendor" / "ffmpeg" / "bin",
     APP_DIR.parent / "Frameworks" / "vendor" / "ffmpeg" / "bin",
@@ -173,6 +174,7 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 jobs: Dict[str, JobState] = {}
 jobs_lock = Lock()
+settings_lock = Lock()
 executor = ThreadPoolExecutor(max_workers=1)
 _model_cache: Dict[str, WhisperModel] = {}
 _model_lock = Lock()
@@ -1213,6 +1215,56 @@ def user_downloads_dir() -> Path:
     return downloads
 
 
+def load_settings() -> Dict[str, str]:
+    if not SETTINGS_PATH.exists():
+        return {}
+    try:
+        data = json.loads(SETTINGS_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def persist_settings(settings: Dict[str, str]) -> None:
+    SETTINGS_PATH.write_text(
+        json.dumps(settings, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+
+def saved_download_directory() -> Path:
+    with settings_lock:
+        directory = load_settings().get("download_directory")
+    if directory:
+        path = Path(directory).expanduser()
+        if path.exists() and path.is_dir():
+            return path
+    return user_downloads_dir()
+
+
+def configured_download_directory() -> Optional[Path]:
+    with settings_lock:
+        directory = load_settings().get("download_directory")
+    if not directory:
+        return None
+    path = Path(directory).expanduser()
+    if path.exists() and path.is_dir():
+        return path
+    return None
+
+
+def set_download_directory(directory: str) -> Path:
+    path = Path(directory).expanduser()
+    path.mkdir(parents=True, exist_ok=True)
+    if not path.is_dir():
+        raise HTTPException(status_code=400, detail="Download location is not a folder.")
+    with settings_lock:
+        settings = load_settings()
+        settings["download_directory"] = str(path)
+        persist_settings(settings)
+    return path
+
+
 def unique_destination_path(directory: Path, filename: str) -> Path:
     safe_name = re.sub(r'[<>:"/\\|?*\x00-\x1f]+', "-", filename).strip(" .") or "download"
     candidate = directory / safe_name
@@ -1229,10 +1281,11 @@ def unique_destination_path(directory: Path, filename: str) -> Path:
         counter += 1
 
 
-def copy_to_downloads(source_path: Path) -> Path:
+def copy_to_downloads(source_path: Path, directory: Optional[str] = None) -> Path:
     if not source_path.exists():
         raise HTTPException(status_code=404, detail="File not found.")
-    destination = unique_destination_path(user_downloads_dir(), source_path.name)
+    target_directory = set_download_directory(directory) if directory else saved_download_directory()
+    destination = unique_destination_path(target_directory, source_path.name)
     shutil.copy2(source_path, destination)
     return destination
 
@@ -1567,8 +1620,19 @@ def download_output(job_id: str, format_name: str) -> FileResponse:
     )
 
 
+@app.get("/api/settings/download-directory")
+def get_download_directory() -> Dict[str, object]:
+    configured = configured_download_directory()
+    directory = configured or user_downloads_dir()
+    return {"directory": str(directory), "configured": bool(configured)}
+
+
 @app.post("/api/jobs/{job_id}/save/{format_name}")
-def save_output_to_downloads(job_id: str, format_name: str) -> Dict[str, str]:
+def save_output_to_downloads(
+    job_id: str,
+    format_name: str,
+    payload: Optional[Dict[str, str]] = Body(default=None),
+) -> Dict[str, str]:
     with jobs_lock:
         job = jobs.get(job_id)
         if not job or not job.outputs:
@@ -1577,7 +1641,7 @@ def save_output_to_downloads(job_id: str, format_name: str) -> Dict[str, str]:
             raise HTTPException(status_code=404, detail="Requested format not found.")
         output_path = Path(job.outputs[format_name])
 
-    destination = copy_to_downloads(output_path)
+    destination = copy_to_downloads(output_path, (payload or {}).get("directory"))
     return {
         "ok": "true",
         "path": str(destination),
@@ -1602,14 +1666,17 @@ def download_bundle(job_id: str) -> FileResponse:
 
 
 @app.post("/api/jobs/{job_id}/save-all")
-def save_bundle_to_downloads(job_id: str) -> Dict[str, str]:
+def save_bundle_to_downloads(
+    job_id: str,
+    payload: Optional[Dict[str, str]] = Body(default=None),
+) -> Dict[str, str]:
     with jobs_lock:
         job = jobs.get(job_id)
         if not job or not job.outputs:
             raise HTTPException(status_code=404, detail="Subtitle bundle not found.")
         bundle_path = build_bundle_zip(job)
 
-    destination = copy_to_downloads(bundle_path)
+    destination = copy_to_downloads(bundle_path, (payload or {}).get("directory"))
     return {
         "ok": "true",
         "path": str(destination),

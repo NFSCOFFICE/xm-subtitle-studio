@@ -279,6 +279,9 @@ const I18N = {
     download_bilingual_md: "下载双语 Markdown",
     download_bilingual_docx: "下载双语 DOCX",
     download_bilingual_ass: "下载双语 ASS",
+    save_location_first: "请选择第一次保存下载文件的位置。",
+    save_location_default_prompt: "保存到默认位置？\n{path}\n\n确定：使用该位置\n取消：重新选择位置",
+    save_location_choose_failed: "没有选择保存位置",
     save_done: "已保存到：{path}",
     save_failed: "保存失败",
     audio_preview_label: "音频预览",
@@ -515,6 +518,9 @@ const I18N = {
     download_bilingual_md: "Download bilingual Markdown",
     download_bilingual_docx: "Download bilingual DOCX",
     download_bilingual_ass: "Download bilingual ASS",
+    save_location_first: "Choose where downloads should be saved first.",
+    save_location_default_prompt: "Save to the default location?\n{path}\n\nOK: use this location\nCancel: choose another location",
+    save_location_choose_failed: "No save location selected",
     save_done: "Saved to: {path}",
     save_failed: "Save failed",
     audio_preview_label: "Audio Preview",
@@ -750,6 +756,9 @@ const I18N = {
     download_bilingual_md: "二言語 Markdown をダウンロード",
     download_bilingual_docx: "二言語 DOCX をダウンロード",
     download_bilingual_ass: "二言語 ASS をダウンロード",
+    save_location_first: "最初にダウンロードの保存先を選択してください。",
+    save_location_default_prompt: "既定の保存先に保存しますか？\n{path}\n\nOK: この場所を使う\nキャンセル: 別の場所を選択",
+    save_location_choose_failed: "保存先が選択されていません",
     save_done: "保存先: {path}",
     save_failed: "保存に失敗しました",
     audio_preview_label: "音声プレビュー",
@@ -986,6 +995,9 @@ const I18N = {
     download_bilingual_md: "Λήψη δίγλωσσου Markdown",
     download_bilingual_docx: "Λήψη δίγλωσσου DOCX",
     download_bilingual_ass: "Λήψη δίγλωσσου ASS",
+    save_location_first: "Επίλεξε πρώτα πού θα αποθηκεύονται οι λήψεις.",
+    save_location_default_prompt: "Αποθήκευση στην προεπιλεγμένη θέση;\n{path}\n\nOK: χρήση αυτής της θέσης\nΆκυρο: επιλογή άλλης θέσης",
+    save_location_choose_failed: "Δεν επιλέχθηκε θέση αποθήκευσης",
     save_done: "Αποθηκεύτηκε σε: {path}",
     save_failed: "Αποτυχία αποθήκευσης",
     audio_preview_label: "Προεπισκόπηση ήχου",
@@ -2060,6 +2072,46 @@ function setDownloadLinks(job) {
   downloadGroup.classList.toggle("hidden", !hasDownloads);
 }
 
+function hasDesktopDownloadPicker() {
+  return Boolean(
+    window.pywebview &&
+      window.pywebview.api &&
+      typeof window.pywebview.api.choose_download_directory === "function"
+  );
+}
+
+async function getSavedDownloadDirectory() {
+  const response = await fetch("/api/settings/download-directory");
+  if (!response.ok) {
+    return { directory: "", configured: false };
+  }
+  const payload = await response.json();
+  return { directory: payload.directory || "", configured: Boolean(payload.configured) };
+}
+
+async function chooseDownloadDirectory(directory) {
+  const result = await window.pywebview.api.choose_download_directory(directory || "");
+  return result && result.directory ? result.directory : "";
+}
+
+async function resolveDownloadDirectory() {
+  if (!hasDesktopDownloadPicker()) {
+    return null;
+  }
+
+  const location = await getSavedDownloadDirectory();
+  if (!location.configured) {
+    alert(t("save_location_first"));
+    return chooseDownloadDirectory(location.directory);
+  }
+
+  const useCurrent = confirm(t("save_location_default_prompt", { path: location.directory }));
+  if (useCurrent) {
+    return location.directory;
+  }
+  return chooseDownloadDirectory(location.directory);
+}
+
 async function saveDownloadToComputer(event) {
   const link = event.target.closest("a[data-save-url]");
   if (!link || !link.dataset.saveUrl) {
@@ -2068,7 +2120,16 @@ async function saveDownloadToComputer(event) {
 
   event.preventDefault();
   try {
-    const response = await fetch(link.dataset.saveUrl, { method: "POST" });
+    const directory = await resolveDownloadDirectory();
+    if (directory === "") {
+      return;
+    }
+    const request = { method: "POST" };
+    if (directory) {
+      request.headers = { "Content-Type": "application/json" };
+      request.body = JSON.stringify({ directory });
+    }
+    const response = await fetch(link.dataset.saveUrl, request);
     const payload = await response.json();
     if (!response.ok) {
       throw new Error(payload.detail || t("save_failed"));

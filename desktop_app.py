@@ -79,6 +79,22 @@ def acquire_single_instance_lock():
     return lock_file
 
 
+class DesktopApi:
+    def __init__(self) -> None:
+        self.window = None
+
+    def choose_download_directory(self, directory: str = "") -> dict[str, str | None]:
+        if self.window is None:
+            return {"directory": None}
+        selected = self.window.create_file_dialog(
+            webview.FOLDER_DIALOG,
+            directory=directory or str(Path.home()),
+        )
+        if not selected:
+            return {"directory": None}
+        return {"directory": str(Path(selected[0]))}
+
+
 def run_server(port: int) -> None:
     global SERVER_ERROR
     try:
@@ -125,12 +141,15 @@ def main() -> None:
     thread.start()
     wait_for_server(port)
 
-    webview.create_window(
+    api = DesktopApi()
+    window = webview.create_window(
         "XM Subtitle Studio",
         f"http://127.0.0.1:{port}",
         min_size=(1280, 820),
         text_select=True,
+        js_api=api,
     )
+    api.window = window
     if sys.platform.startswith("win"):
         if getattr(sys, "frozen", False):
             # Frozen Windows builds: pythonnet-backed backends can fail to
