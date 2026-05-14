@@ -24,6 +24,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from faster_whisper import WhisperModel
+from huggingface_hub import snapshot_download
 from docx import Document
 from sklearn.cluster import AgglomerativeClustering
 from transformers import pipeline
@@ -103,6 +104,36 @@ for fallback_bin in (
     Path("/opt/local/bin"),
 ):
     prepend_path_if_exists(fallback_bin)
+
+
+def _ffmpeg_install_hint() -> str:
+    if sys.platform.startswith("win"):
+        return (
+            "Install options:\n"
+            "  - Run start-win.bat once to auto-download FFmpeg into vendor/ffmpeg/\n"
+            "  - Or install system-wide: winget install Gyan.FFmpeg"
+        )
+    if sys.platform == "darwin":
+        return "Install via Homebrew: brew install ffmpeg"
+    return "Install ffmpeg via your system package manager (e.g., apt install ffmpeg)."
+
+
+def resolve_ffmpeg_binary(name: str) -> str:
+    """Return absolute path to ffmpeg/ffprobe, searching vendor dirs then system PATH."""
+    exe_name = f"{name}.exe" if sys.platform.startswith("win") else name
+    for vendor_bin in VENDOR_FFMPEG_BIN_CANDIDATES:
+        candidate = vendor_bin / exe_name
+        if candidate.exists():
+            return str(candidate)
+    found = shutil.which(name)
+    if found:
+        return found
+    checked = ", ".join(str(d / exe_name) for d in VENDOR_FFMPEG_BIN_CANDIDATES)
+    raise RuntimeError(
+        f"{name} is required but was not found.\n"
+        f"Checked: {checked} and system PATH.\n"
+        f"{_ffmpeg_install_hint()}"
+    )
 
 
 @dataclass
@@ -274,26 +305,21 @@ def utc_now() -> str:
 
 
 def get_audio_duration(file_path: Path) -> float:
-    try:
-        result = subprocess.run(
-            [
-                "ffprobe",
-                "-v",
-                "error",
-                "-show_entries",
-                "format=duration",
-                "-of",
-                "json",
-                str(file_path),
-            ],
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-    except FileNotFoundError as exc:
-        raise RuntimeError(
-            "ffprobe is required but was not found. Please install FFmpeg or place ffprobe under vendor/ffmpeg/bin."
-        ) from exc
+    result = subprocess.run(
+        [
+            resolve_ffmpeg_binary("ffprobe"),
+            "-v",
+            "error",
+            "-show_entries",
+            "format=duration",
+            "-of",
+            "json",
+            str(file_path),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
     payload = json.loads(result.stdout or "{}")
     duration = payload.get("format", {}).get("duration", 0)
     return float(duration or 0)
@@ -308,7 +334,7 @@ def prepare_audio_for_transcription(file_path: Path) -> tuple[Path, float, Optio
     padded_path = temp_dir / "lead-padded.wav"
     subprocess.run(
         [
-            "ffmpeg",
+            resolve_ffmpeg_binary("ffmpeg"),
             "-y",
             "-f",
             "lavfi",
@@ -914,14 +940,39 @@ def write_ass_subtitles(
     output_path.write_text("\n".join(lines), encoding="utf-8")
 
 
+_FW_REPO_MAP = {
+    "tiny": "Systran/faster-whisper-tiny",
+    "base": "Systran/faster-whisper-base",
+    "small": "Systran/faster-whisper-small",
+    "medium": "Systran/faster-whisper-medium",
+    "large-v1": "Systran/faster-whisper-large-v1",
+    "large-v2": "Systran/faster-whisper-large-v2",
+    "large-v3": "Systran/faster-whisper-large-v3",
+}
+
+
+def _ensure_local_whisper_model(model_size: str) -> str:
+    # If caller passed a local path, honor it.
+    candidate = Path(model_size)
+    if candidate.exists():
+        return str(candidate)
+    repo_id = _FW_REPO_MAP.get(model_size, f"Systran/faster-whisper-{model_size}")
+    local_dir = MODEL_DIR / repo_id.split("/")[-1]
+    if not (local_dir / "model.bin").exists():
+        local_dir.mkdir(parents=True, exist_ok=True)
+        # local_dir avoids the HF cache's blob+symlink layout, which fails on
+        # Windows without SeCreateSymbolicLinkPrivilege (WinError 1314).
+        snapshot_download(repo_id=repo_id, local_dir=str(local_dir))
+    return str(local_dir)
+
+
 def load_model(model_size: str) -> WhisperModel:
     with _model_lock:
         if model_size not in _model_cache:
             _model_cache[model_size] = WhisperModel(
-                model_size,
+                _ensure_local_whisper_model(model_size),
                 device="cpu",
                 compute_type="int8",
-                download_root=str(MODEL_DIR),
             )
         return _model_cache[model_size]
 
@@ -932,7 +983,7 @@ def probe_auto_language(model: WhisperModel, audio_path: Path) -> tuple[Optional
     try:
         subprocess.run(
             [
-                "ffmpeg",
+                resolve_ffmpeg_binary("ffmpeg"),
                 "-y",
                 "-i",
                 str(audio_path),
@@ -1026,7 +1077,7 @@ def convert_audio_for_diarization(audio_path: Path) -> Path:
     wav_path = temp_dir / f"{audio_path.stem}.wav"
     subprocess.run(
         [
-            "ffmpeg",
+            resolve_ffmpeg_binary("ffmpeg"),
             "-y",
             "-i",
             str(audio_path),

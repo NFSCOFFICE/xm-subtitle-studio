@@ -2023,3 +2023,24 @@ select:focus {
     height: 120px;
   }
 }
+
+/*
+ * Windows desktop runs Qt WebEngine with software rasterization
+ * (QT_OPENGL=software, --disable-gpu). Under software raster,
+ * backdrop-filter:blur and transition:all are extremely expensive on scroll.
+ * Other platforms (macOS WKWebView, Linux) keep GPU acceleration and the
+ * original visuals. Inline script in index.html adds .win-software-raster
+ * to <html> on Windows before paint to avoid FOUC.
+ */
+html.win-software-raster .topbar,
+html.win-software-raster .intake-panel,
+html.win-software-raster .job-card,
+html.win-software-raster .editor-card,
+html.win-software-raster .history-menu,
+html.win-software-raster .preview-mini {
+  backdrop-filter: none;
+}
+
+html.win-software-raster .subtitle-overlay {
+  transition: transform 180ms ease, opacity 180ms ease;
+}

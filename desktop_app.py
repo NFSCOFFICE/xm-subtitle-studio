@@ -98,8 +98,9 @@ def run_server(port: int) -> None:
         raise
 
 
-def wait_for_server(port: int, timeout: float = 15.0) -> None:
-    deadline = time.time() + timeout
+def wait_for_server(port: int, timeout: float = 60.0) -> None:
+    started = time.time()
+    deadline = started + timeout
     while time.time() < deadline:
         if SERVER_ERROR is not None:
             raise RuntimeError(f"Desktop server failed to start: {SERVER_ERROR}") from SERVER_ERROR
@@ -108,7 +109,10 @@ def wait_for_server(port: int, timeout: float = 15.0) -> None:
                 return
         except OSError:
             time.sleep(0.1)
-    raise RuntimeError("Desktop server failed to start in time.")
+    elapsed = time.time() - started
+    raise RuntimeError(
+        f"Desktop server failed to start in time (waited {elapsed:.1f}s, timeout {timeout:.0f}s)."
+    )
 
 
 def main() -> None:
@@ -128,10 +132,16 @@ def main() -> None:
         text_select=True,
     )
     if sys.platform.startswith("win"):
-        # Avoid the WinForms/pythonnet backend in frozen Windows builds. That
-        # backend can fail to resolve Python.Runtime.dll after PyInstaller
-        # collection; Qt is self-contained through PySide6.
-        webview.start(gui="qt")
+        if getattr(sys, "frozen", False):
+            # Frozen Windows builds: pythonnet-backed backends can fail to
+            # resolve Python.Runtime.dll after PyInstaller collection. Qt is
+            # self-contained through PySide6.
+            webview.start(gui="qt")
+        else:
+            # Source runs: prefer Edge WebView2. PySide6's QtWebEngine pip
+            # wheel ships without proprietary codecs, so H.264/MP4 preview
+            # comes back as a black frame under the qt backend.
+            webview.start(gui="edgechromium")
     else:
         webview.start()
     lock_file.close()
