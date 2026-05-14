@@ -128,10 +128,16 @@ def main() -> None:
         text_select=True,
     )
     if sys.platform.startswith("win"):
-        # Avoid the WinForms/pythonnet backend in frozen Windows builds. That
-        # backend can fail to resolve Python.Runtime.dll after PyInstaller
-        # collection; Qt is self-contained through PySide6.
-        webview.start(gui="qt")
+        if getattr(sys, "frozen", False):
+            # Frozen Windows builds: pythonnet-backed backends can fail to
+            # resolve Python.Runtime.dll after PyInstaller collection. Qt is
+            # self-contained through PySide6.
+            webview.start(gui="qt")
+        else:
+            # Source runs: prefer Edge WebView2. PySide6's QtWebEngine pip
+            # wheel ships without proprietary codecs, so H.264/MP4 preview
+            # comes back as a black frame under the qt backend.
+            webview.start(gui="edgechromium")
     else:
         webview.start()
     lock_file.close()
