@@ -28,7 +28,7 @@ XM Subtitle Studio 面向需要稳定交付字幕的人，而不是普通上传�
 | Recognition | Whisper 离线识别、自动语言检测、手动语言选择 |
 | Media | 支持音频和视频导入，视频可进入实时预览 |
 | Timeline | VAD 声音锁定、行内编辑、增删段、合并、拆分、区间播放 |
-| Delivery | SRT、VTT、TXT、JSON、ASS、Markdown、DOCX、ZIP 一键保存到 Downloads |
+| Delivery | SRT、VTT、TXT、JSON、ASS、Markdown、DOCX、ZIP 一键保存到选择的本地目录 |
 | Quality Check | 扫描空字幕、时间重叠、过短过长、行长超限、可疑文本 |
 | Enhancement | 双语字幕、说话人标记、断句优化 |
 | Workflow | 批量转写、暂停轮询、任务筛选、ZIP 下载全部产物 |
@@ -173,9 +173,9 @@ Automatic update checks can be added later through GitHub Releases or a public `
 ## Download Behavior
 
 - In a normal browser, download links keep working through the `/api/jobs/{id}/download/...` endpoints.
-- In the packaged desktop app, download buttons call local save endpoints and copy files directly to the system Downloads folder.
+- In the packaged desktop app, the first download asks for a save location. Later downloads prompt before using the saved default location, and users can choose a different folder from that prompt.
 - ZIP, SRT, VTT, TXT, JSON, ASS, Markdown, DOCX, and bilingual outputs use the original media filename as the export stem.
-- If a file with the same name already exists in Downloads, the app appends `-1`, `-2`, etc. instead of overwriting.
+- If a file with the same name already exists in the selected folder, the app appends `-1`, `-2`, etc. instead of overwriting.
 
 ## Offline Model Notes
 
