@@ -98,8 +98,9 @@ def run_server(port: int) -> None:
         raise
 
 
-def wait_for_server(port: int, timeout: float = 15.0) -> None:
-    deadline = time.time() + timeout
+def wait_for_server(port: int, timeout: float = 60.0) -> None:
+    started = time.time()
+    deadline = started + timeout
     while time.time() < deadline:
         if SERVER_ERROR is not None:
             raise RuntimeError(f"Desktop server failed to start: {SERVER_ERROR}") from SERVER_ERROR
@@ -108,7 +109,10 @@ def wait_for_server(port: int, timeout: float = 15.0) -> None:
                 return
         except OSError:
             time.sleep(0.1)
-    raise RuntimeError("Desktop server failed to start in time.")
+    elapsed = time.time() - started
+    raise RuntimeError(
+        f"Desktop server failed to start in time (waited {elapsed:.1f}s, timeout {timeout:.0f}s)."
+    )
 
 
 def main() -> None:
