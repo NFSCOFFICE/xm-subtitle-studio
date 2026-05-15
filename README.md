@@ -162,13 +162,20 @@ Note: PyInstaller builds are platform-specific. Build macOS packages on macOS an
 
 ## Updates
 
-Current desktop builds use manual updates:
+Current app version: `0.1.7`.
+
+Desktop builds can check GitHub Releases for updates from the version button in the top bar. The update panel shows:
+
+- Current app version and latest published release version.
+- What's new in the current version.
+- Latest GitHub Release notes when a release is available.
+- A download button that opens the release page in the system browser.
+
+Installation is still manual:
 
 1. Download the latest release package.
 2. Replace the old app with the new version.
 3. Existing local models, uploads, outputs, drafts, and history remain on the local machine.
-
-Automatic update checks can be added later through GitHub Releases or a public `version.json` manifest.
 
 ## Download Behavior
 

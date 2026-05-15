@@ -6,7 +6,9 @@ import socket
 import sys
 import threading
 import time
+import webbrowser
 from pathlib import Path
+from urllib.parse import urlparse
 
 import uvicorn
 
@@ -93,6 +95,13 @@ class DesktopApi:
         if not selected:
             return {"directory": None}
         return {"directory": str(Path(selected[0]))}
+
+    def open_external_url(self, url: str) -> dict[str, bool]:
+        parsed = urlparse(url)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            return {"ok": False}
+        webbrowser.open(url)
+        return {"ok": True}
 
 
 def run_server(port: int) -> None:

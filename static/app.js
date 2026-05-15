@@ -6,6 +6,19 @@ const historyTrigger = document.getElementById("history-trigger");
 const historyMenu = document.getElementById("history-menu");
 const historyList = document.getElementById("history-list");
 const historyCount = document.getElementById("history-count");
+const updateTrigger = document.getElementById("update-trigger");
+const updateBadge = document.getElementById("update-badge");
+const appVersionLabel = document.getElementById("app-version-label");
+const updateModal = document.getElementById("update-modal");
+const updateCloseButton = document.getElementById("update-close-button");
+const updateCheckButton = document.getElementById("update-check-button");
+const updateDownloadButton = document.getElementById("update-download-button");
+const currentVersionText = document.getElementById("current-version-text");
+const latestVersionText = document.getElementById("latest-version-text");
+const updateStateText = document.getElementById("update-state-text");
+const currentReleaseNotes = document.getElementById("current-release-notes");
+const latestReleaseSection = document.getElementById("latest-release-section");
+const latestReleaseNotes = document.getElementById("latest-release-notes");
 const previewGrid = document.getElementById("preview-grid");
 const videoInput = document.getElementById("video-input");
 const videoPreview = document.getElementById("video-preview");
@@ -102,6 +115,8 @@ let qualityAutoGroupCollapsed = true;
 let waveformJobId = null;
 let waveformRequestId = 0;
 let waveformData = null;
+let appInfo = null;
+let latestUpdateInfo = null;
 const jobs = new Map();
 const editorStateByJob = new Map();
 const UI_LOCALES = [
@@ -260,6 +275,21 @@ const I18N = {
     history_empty: "当前没有历史记录。",
     history_restore: "继续编辑",
     history_restored: "已恢复为草稿并进入编辑。",
+    update_badge: "新",
+    update_label: "版本更新",
+    update_title: "更新与新功能",
+    close: "关闭",
+    current_version: "当前版本",
+    latest_version: "最新版本",
+    update_ready: "可以检查 GitHub Release 是否有新版本。",
+    update_checking: "正在检查更新...",
+    update_available: "发现新版本 {version}，建议下载更新。",
+    update_current: "当前已是最新版本。",
+    update_unavailable: "暂时无法检查更新：{message}",
+    current_release_notes: "本版本新功能",
+    latest_release_notes: "最新版本说明",
+    check_updates: "检查更新",
+    open_release: "打开下载页",
     pending_outputs_title: "待生成产物",
     pending_outputs_note: "任务完成后可一键下载 ZIP 和全部字幕文件。",
     format_srt: "SRT",
@@ -499,6 +529,21 @@ const I18N = {
     history_empty: "No history yet.",
     history_restore: "Continue editing",
     history_restored: "Restored as draft and opened for editing.",
+    update_badge: "New",
+    update_label: "Version",
+    update_title: "Updates and What's New",
+    close: "Close",
+    current_version: "Current version",
+    latest_version: "Latest version",
+    update_ready: "Check GitHub Releases for a newer version.",
+    update_checking: "Checking for updates...",
+    update_available: "Version {version} is available. Downloading is recommended.",
+    update_current: "You are already on the latest version.",
+    update_unavailable: "Update check is unavailable: {message}",
+    current_release_notes: "What's new in this version",
+    latest_release_notes: "Latest release notes",
+    check_updates: "Check for updates",
+    open_release: "Open download page",
     pending_outputs_title: "Pending outputs",
     pending_outputs_note: "Download ZIP and all subtitle files after completion.",
     format_srt: "SRT",
@@ -737,6 +782,21 @@ const I18N = {
     history_empty: "履歴はまだありません。",
     history_restore: "編集を続ける",
     history_restored: "下書きに復元して編集を再開しました。",
+    update_badge: "新",
+    update_label: "バージョン",
+    update_title: "更新と新機能",
+    close: "閉じる",
+    current_version: "現在のバージョン",
+    latest_version: "最新バージョン",
+    update_ready: "GitHub Releases で新しいバージョンを確認できます。",
+    update_checking: "更新を確認中...",
+    update_available: "新しいバージョン {version} があります。更新をおすすめします。",
+    update_current: "現在のバージョンは最新です。",
+    update_unavailable: "更新を確認できません: {message}",
+    current_release_notes: "このバージョンの新機能",
+    latest_release_notes: "最新バージョンの説明",
+    check_updates: "更新を確認",
+    open_release: "ダウンロードページを開く",
     pending_outputs_title: "生成待ちの出力",
     pending_outputs_note: "完了後に ZIP とすべての字幕ファイルをまとめて取得できます。",
     format_srt: "SRT",
@@ -976,6 +1036,21 @@ const I18N = {
     history_empty: "Δεν υπάρχει ιστορικό ακόμη.",
     history_restore: "Συνέχεια επεξεργασίας",
     history_restored: "Αποκαταστάθηκε ως πρόχειρο και άνοιξε για επεξεργασία.",
+    update_badge: "Νέο",
+    update_label: "Έκδοση",
+    update_title: "Ενημερώσεις και νέα",
+    close: "Κλείσιμο",
+    current_version: "Τρέχουσα έκδοση",
+    latest_version: "Τελευταία έκδοση",
+    update_ready: "Έλεγξε τα GitHub Releases για νεότερη έκδοση.",
+    update_checking: "Έλεγχος ενημερώσεων...",
+    update_available: "Υπάρχει νέα έκδοση {version}. Συνιστάται λήψη.",
+    update_current: "Έχεις ήδη την τελευταία έκδοση.",
+    update_unavailable: "Ο έλεγχος ενημέρωσης δεν είναι διαθέσιμος: {message}",
+    current_release_notes: "Νέα αυτής της έκδοσης",
+    latest_release_notes: "Σημειώσεις τελευταίας έκδοσης",
+    check_updates: "Έλεγχος ενημέρωσης",
+    open_release: "Άνοιγμα σελίδας λήψης",
     pending_outputs_title: "Αναμένονται αρχεία",
     pending_outputs_note: "Μετά την ολοκλήρωση θα μπορείς να κατεβάσεις ZIP και όλα τα αρχεία υποτίτλων.",
     format_srt: "SRT",
@@ -1205,6 +1280,7 @@ function applyI18n() {
     fileName.textContent = t("file_empty");
   }
   renderQualityPanel(currentSegments());
+  renderUpdatePanel();
 }
 
 function initializePreferences() {
@@ -1214,6 +1290,108 @@ function initializePreferences() {
     : null;
   currentLocale = storedLocale && I18N[storedLocale] ? storedLocale : (browserLocale || "zh-CN");
   applyI18n();
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function releaseBodyToHtml(body) {
+  const lines = String(body || "").split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  if (!lines.length) {
+    return "";
+  }
+  return lines.slice(0, 20).map((line) => `<p>${escapeHtml(line.replace(/^[-*]\s*/, ""))}</p>`).join("");
+}
+
+function renderUpdatePanel() {
+  if (!appVersionLabel || !currentVersionText || !currentReleaseNotes) {
+    return;
+  }
+  const version = appInfo?.version || "0.1.7";
+  appVersionLabel.textContent = `v${version}`;
+  currentVersionText.textContent = `v${version}`;
+  const latestVersion = latestUpdateInfo?.latest_version || latestUpdateInfo?.latest_tag || "-";
+  latestVersionText.textContent = latestVersion === "-" ? latestVersion : `v${String(latestVersion).replace(/^v/i, "")}`;
+  const notes = appInfo?.release_notes || latestUpdateInfo?.release_notes || [];
+  currentReleaseNotes.innerHTML = notes.length
+    ? notes.map((note) => `<li>${escapeHtml(note)}</li>`).join("")
+    : `<li>${escapeHtml(t("update_ready"))}</li>`;
+
+  if (latestUpdateInfo?.body) {
+    latestReleaseSection.classList.remove("hidden");
+    latestReleaseNotes.innerHTML = releaseBodyToHtml(latestUpdateInfo.body);
+  } else {
+    latestReleaseSection.classList.add("hidden");
+    latestReleaseNotes.innerHTML = "";
+  }
+
+  updateBadge.classList.toggle("hidden", !latestUpdateInfo?.update_available);
+  updateDownloadButton.classList.toggle("hidden", !latestUpdateInfo?.html_url);
+}
+
+function setUpdateModalOpen(open) {
+  updateModal.classList.toggle("hidden", !open);
+}
+
+async function openExternalUrl(url) {
+  if (!url) {
+    return;
+  }
+  if (
+    window.pywebview &&
+    window.pywebview.api &&
+    typeof window.pywebview.api.open_external_url === "function"
+  ) {
+    const result = await window.pywebview.api.open_external_url(url);
+    if (result?.ok) {
+      return;
+    }
+  }
+  window.open(url, "_blank", "noopener,noreferrer");
+}
+
+async function loadAppVersion() {
+  const response = await fetch("/api/app-version");
+  if (!response.ok) {
+    return;
+  }
+  appInfo = await response.json();
+  renderUpdatePanel();
+}
+
+async function checkForUpdates({ silent = false } = {}) {
+  if (!silent) {
+    setUpdateModalOpen(true);
+  }
+  updateCheckButton.disabled = true;
+  updateStateText.textContent = t("update_checking");
+  try {
+    const response = await fetch("/api/updates/check");
+    const payload = await response.json();
+    latestUpdateInfo = payload;
+    if (payload.update_available) {
+      updateStateText.textContent = t("update_available", { version: `v${payload.latest_version || payload.latest_tag}` });
+      setUpdateModalOpen(true);
+    } else if (payload.available) {
+      updateStateText.textContent = t("update_current");
+    } else {
+      updateStateText.textContent = t("update_unavailable", { message: payload.error || "-" });
+    }
+    renderUpdatePanel();
+  } catch (error) {
+    updateStateText.textContent = t("update_unavailable", { message: error.message || "-" });
+    if (!silent) {
+      setUpdateModalOpen(true);
+    }
+  } finally {
+    updateCheckButton.disabled = false;
+  }
 }
 
 function cloneSegments(segments) {
@@ -3586,6 +3764,20 @@ editorList.addEventListener("keydown", (event) => {
 });
 
 downloadGroup.addEventListener("click", saveDownloadToComputer);
+updateTrigger.addEventListener("click", () => {
+  setUpdateModalOpen(true);
+  checkForUpdates();
+});
+updateCloseButton.addEventListener("click", () => setUpdateModalOpen(false));
+updateCheckButton.addEventListener("click", () => checkForUpdates());
+updateDownloadButton.addEventListener("click", () => {
+  openExternalUrl(latestUpdateInfo?.html_url || appInfo?.releases_url);
+});
+updateModal.addEventListener("click", (event) => {
+  if (event.target === updateModal) {
+    setUpdateModalOpen(false);
+  }
+});
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -3652,6 +3844,7 @@ document.addEventListener("keydown", (event) => {
 updatePreviewVisual();
 updateOffsetDisplay();
 initializePreferences();
+loadAppVersion().then(() => checkForUpdates({ silent: true }));
 syncPresetHighlight();
 setPreviewVisible(false);
 setJobVisible(true);

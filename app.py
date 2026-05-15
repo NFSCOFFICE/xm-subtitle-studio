@@ -8,6 +8,8 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import urllib.error
+import urllib.request
 import uuid
 import zipfile
 from concurrent.futures import ThreadPoolExecutor
@@ -37,6 +39,14 @@ except Exception:
 
 
 SOURCE_DIR = Path(__file__).resolve().parent
+APP_VERSION = "0.1.7"
+APP_REPOSITORY = "NFSCOFFICE/xm-subtitle-studio"
+APP_RELEASES_URL = f"https://github.com/{APP_REPOSITORY}/releases"
+CURRENT_RELEASE_NOTES = [
+    "Download location prompts for desktop saves.",
+    "Version display and update check panel.",
+    "Windows rendering, FFmpeg detection, model download, and preview playback fixes.",
+]
 if getattr(sys, "frozen", False):
     APP_DIR = Path(sys.executable).resolve().parent
     RESOURCE_DIR = Path(getattr(sys, "_MEIPASS", APP_DIR))
@@ -258,6 +268,72 @@ def persist_jobs(snapshot: Optional[List[Dict[str, object]]] = None) -> None:
         json.dumps(snapshot, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
+
+
+def normalize_version(value: str) -> List[int]:
+    cleaned = value.strip().lower()
+    if cleaned.startswith("v"):
+        cleaned = cleaned[1:]
+    parts: List[int] = []
+    for token in re.split(r"[^0-9]+", cleaned):
+        if token:
+            parts.append(int(token))
+    return parts or [0]
+
+
+def is_newer_version(candidate: str, current: str) -> bool:
+    candidate_parts = normalize_version(candidate)
+    current_parts = normalize_version(current)
+    width = max(len(candidate_parts), len(current_parts))
+    candidate_parts.extend([0] * (width - len(candidate_parts)))
+    current_parts.extend([0] * (width - len(current_parts)))
+    return candidate_parts > current_parts
+
+
+def fetch_latest_release() -> Dict[str, object]:
+    request = urllib.request.Request(
+        f"https://api.github.com/repos/{APP_REPOSITORY}/releases/latest",
+        headers={
+            "Accept": "application/vnd.github+json",
+            "User-Agent": f"XM-Subtitle-Studio/{APP_VERSION}",
+        },
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=6) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        if exc.code == 404:
+            return {
+                "available": False,
+                "current_version": APP_VERSION,
+                "update_available": False,
+                "error": "No published releases found.",
+            }
+        raise RuntimeError(f"Release check failed: HTTP {exc.code}") from exc
+    except (OSError, urllib.error.URLError, json.JSONDecodeError) as exc:
+        raise RuntimeError(f"Release check failed: {exc}") from exc
+
+    latest_version = str(payload.get("tag_name") or "").lstrip("v")
+    assets = [
+        {
+            "name": asset.get("name"),
+            "download_url": asset.get("browser_download_url"),
+        }
+        for asset in payload.get("assets", [])
+        if asset.get("name") and asset.get("browser_download_url")
+    ]
+    return {
+        "available": True,
+        "current_version": APP_VERSION,
+        "latest_version": latest_version,
+        "latest_tag": payload.get("tag_name") or "",
+        "update_available": bool(latest_version and is_newer_version(latest_version, APP_VERSION)),
+        "name": payload.get("name") or payload.get("tag_name") or "",
+        "body": payload.get("body") or "",
+        "html_url": payload.get("html_url") or APP_RELEASES_URL,
+        "published_at": payload.get("published_at") or "",
+        "assets": assets,
+    }
 
 
 def load_jobs_from_disk() -> Dict[str, JobState]:
@@ -1421,6 +1497,33 @@ def index() -> FileResponse:
 @app.get("/favicon.ico")
 def favicon() -> FileResponse:
     return FileResponse(STATIC_DIR / "favicon.svg", media_type="image/svg+xml")
+
+
+@app.get("/api/app-version")
+def app_version() -> Dict[str, object]:
+    return {
+        "version": APP_VERSION,
+        "repository": APP_REPOSITORY,
+        "releases_url": APP_RELEASES_URL,
+        "release_notes": CURRENT_RELEASE_NOTES,
+    }
+
+
+@app.get("/api/updates/check")
+def check_for_updates() -> Dict[str, object]:
+    try:
+        result = fetch_latest_release()
+    except RuntimeError as exc:
+        return {
+            "available": False,
+            "current_version": APP_VERSION,
+            "update_available": False,
+            "error": str(exc),
+            "releases_url": APP_RELEASES_URL,
+        }
+    result["release_notes"] = CURRENT_RELEASE_NOTES
+    result["releases_url"] = APP_RELEASES_URL
+    return result
 
 
 @app.get("/api/jobs")

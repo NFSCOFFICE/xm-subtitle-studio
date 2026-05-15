@@ -39,6 +39,10 @@
                   <div id="history-list" class="history-list"></div>
                 </div>
               </div>
+              <button id="update-trigger" type="button" class="toolbar-button update-trigger">
+                <span id="app-version-label">v0.1.7</span>
+                <strong id="update-badge" class="history-count hidden" data-i18n="update_badge">新</strong>
+              </button>
               <label class="toolbar-control">
                 <span data-i18n="ui_language">语言</span>
                 <select id="ui-locale" class="toolbar-select"></select>
@@ -421,6 +425,40 @@
           <p data-i18n="footer_copy">© 2026 XM. All rights reserved.</p>
         </footer>
       </main>
+      <div id="update-modal" class="modal-shell hidden" role="dialog" aria-modal="true" aria-labelledby="update-modal-title">
+        <div class="modal-panel update-panel">
+          <div class="modal-head">
+            <div>
+              <p class="panel-label" data-i18n="update_label">版本更新</p>
+              <h3 id="update-modal-title" data-i18n="update_title">更新与新功能</h3>
+            </div>
+            <button id="update-close-button" type="button" class="secondary-button compact-button" data-i18n="close">关闭</button>
+          </div>
+          <div class="update-status-row">
+            <div>
+              <span data-i18n="current_version">当前版本</span>
+              <strong id="current-version-text">v0.1.7</strong>
+            </div>
+            <div>
+              <span data-i18n="latest_version">最新版本</span>
+              <strong id="latest-version-text">-</strong>
+            </div>
+          </div>
+          <p id="update-state-text" class="update-state-text" data-i18n="update_ready">可以检查 GitHub Release 是否有新版本。</p>
+          <section class="update-notes-block">
+            <h4 data-i18n="current_release_notes">本版本新功能</h4>
+            <ul id="current-release-notes" class="update-notes-list"></ul>
+          </section>
+          <section id="latest-release-section" class="update-notes-block hidden">
+            <h4 data-i18n="latest_release_notes">最新版本说明</h4>
+            <div id="latest-release-notes" class="update-release-body"></div>
+          </section>
+          <div class="modal-actions">
+            <button id="update-check-button" type="button" class="secondary-button" data-i18n="check_updates">检查更新</button>
+            <button id="update-download-button" type="button" class="primary-button hidden" data-i18n="open_release">打开下载页</button>
+          </div>
+        </div>
+      </div>
     </div>
 
     <script src="/static/app.js" defer></script>
