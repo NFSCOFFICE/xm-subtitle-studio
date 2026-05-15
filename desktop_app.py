@@ -7,6 +7,7 @@ import sys
 import threading
 import time
 import webbrowser
+import subprocess
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -101,6 +102,21 @@ class DesktopApi:
         if parsed.scheme not in {"http", "https"} or not parsed.netloc:
             return {"ok": False}
         webbrowser.open(url)
+        return {"ok": True}
+
+    def reveal_path(self, path: str) -> dict[str, bool]:
+        target = Path(path)
+        if not target.exists():
+            return {"ok": False}
+        if sys.platform == "darwin":
+            subprocess.Popen(["open", str(target)])
+        elif sys.platform.startswith("win"):
+            if target.is_file():
+                subprocess.Popen(["explorer", "/select,", str(target)])
+            else:
+                subprocess.Popen(["explorer", str(target)])
+        else:
+            subprocess.Popen(["xdg-open", str(target if target.is_dir() else target.parent)])
         return {"ok": True}
 
 

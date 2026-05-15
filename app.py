@@ -16,7 +16,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass, field, fields
 from datetime import datetime
 from pathlib import Path
-from threading import Lock
+from threading import Lock, Thread
 from typing import Dict, List, Optional
 
 import numpy as np
@@ -71,6 +71,7 @@ UPLOAD_DIR = WRITABLE_DIR / "uploads"
 OUTPUT_DIR = WRITABLE_DIR / "outputs"
 MODEL_DIR = RESOURCE_DIR / "models" if (RESOURCE_DIR / "models").exists() else WRITABLE_DIR / "models"
 DATA_DIR = WRITABLE_DIR / "data"
+UPDATE_DIR = WRITABLE_DIR / "updates"
 JOB_STORE_PATH = DATA_DIR / "jobs.json"
 SETTINGS_PATH = DATA_DIR / "settings.json"
 VENDOR_FFMPEG_BIN_CANDIDATES = (
@@ -94,7 +95,7 @@ ALLOWED_SUFFIXES = {
 VIDEO_SUFFIXES = {".mp4", ".mov", ".mkv", ".webm", ".m4v", ".avi"}
 SUPPORTED_MEDIA_LABEL = ", ".join(sorted(suffix.lstrip(".") for suffix in ALLOWED_SUFFIXES))
 
-for directory in (STATIC_DIR, UPLOAD_DIR, OUTPUT_DIR, MODEL_DIR, DATA_DIR):
+for directory in (STATIC_DIR, UPLOAD_DIR, OUTPUT_DIR, MODEL_DIR, DATA_DIR, UPDATE_DIR):
     directory.mkdir(parents=True, exist_ok=True)
 
 
@@ -185,6 +186,8 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 jobs: Dict[str, JobState] = {}
 jobs_lock = Lock()
 settings_lock = Lock()
+update_downloads: Dict[str, Dict[str, object]] = {}
+update_downloads_lock = Lock()
 executor = ThreadPoolExecutor(max_workers=1)
 _model_cache: Dict[str, WhisperModel] = {}
 _model_lock = Lock()
@@ -334,6 +337,91 @@ def fetch_latest_release() -> Dict[str, object]:
         "published_at": payload.get("published_at") or "",
         "assets": assets,
     }
+
+
+def current_platform_release_asset(assets: List[Dict[str, str]]) -> Optional[Dict[str, str]]:
+    if sys.platform == "darwin":
+        candidates = [
+            asset for asset in assets
+            if str(asset.get("name", "")).lower().endswith((".dmg", ".zip"))
+            and "macos" in str(asset.get("name", "")).lower()
+        ]
+        return next((asset for asset in candidates if str(asset.get("name", "")).lower().endswith(".dmg")), None) or (candidates[0] if candidates else None)
+    if sys.platform.startswith("win"):
+        return next(
+            (
+                asset for asset in assets
+                if "windows" in str(asset.get("name", "")).lower()
+                and str(asset.get("name", "")).lower().endswith(".zip")
+            ),
+            None,
+        )
+    return assets[0] if assets else None
+
+
+def safe_update_filename(filename: str) -> str:
+    return re.sub(r'[<>:"/\\|?*\x00-\x1f]+', "-", filename).strip(" .") or "update-package"
+
+
+def extract_update_if_needed(package_path: Path, version: str) -> Optional[Path]:
+    if not sys.platform.startswith("win") or package_path.suffix.lower() != ".zip":
+        return None
+    extract_dir = UPDATE_DIR / f"{package_path.stem}-extracted"
+    if extract_dir.exists():
+        shutil.rmtree(extract_dir)
+    extract_dir.mkdir(parents=True, exist_ok=True)
+    with zipfile.ZipFile(package_path) as archive:
+        archive.extractall(extract_dir)
+    return extract_dir
+
+
+def set_update_download_state(download_id: str, **updates: object) -> None:
+    with update_downloads_lock:
+        state = update_downloads.get(download_id, {})
+        state.update(updates)
+        update_downloads[download_id] = state
+
+
+def download_update_package(download_id: str, asset: Dict[str, str], version: str) -> None:
+    url = asset["download_url"]
+    filename = safe_update_filename(asset["name"])
+    package_path = unique_destination_path(UPDATE_DIR, filename)
+    try:
+        set_update_download_state(download_id, status="downloading", package_path=str(package_path))
+        request = urllib.request.Request(
+            url,
+            headers={"User-Agent": f"XM-Subtitle-Studio/{APP_VERSION}"},
+        )
+        with urllib.request.urlopen(request, timeout=20) as response:
+            total_header = response.headers.get("Content-Length")
+            total = int(total_header) if total_header and total_header.isdigit() else 0
+            downloaded = 0
+            with package_path.open("wb") as output:
+                while True:
+                    chunk = response.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    output.write(chunk)
+                    downloaded += len(chunk)
+                    progress = round(downloaded / total, 4) if total else 0
+                    set_update_download_state(
+                        download_id,
+                        downloaded=downloaded,
+                        total=total,
+                        progress=progress,
+                    )
+        install_path = extract_update_if_needed(package_path, version)
+        set_update_download_state(
+            download_id,
+            status="ready",
+            progress=1,
+            downloaded=package_path.stat().st_size,
+            install_path=str(install_path) if install_path else str(package_path),
+            package_path=str(package_path),
+            message="Update package is ready. Quit the app and replace the old installation.",
+        )
+    except Exception as exc:  # noqa: BLE001
+        set_update_download_state(download_id, status="failed", error=str(exc))
 
 
 def load_jobs_from_disk() -> Dict[str, JobState]:
@@ -1523,7 +1611,49 @@ def check_for_updates() -> Dict[str, object]:
         }
     result["release_notes"] = CURRENT_RELEASE_NOTES
     result["releases_url"] = APP_RELEASES_URL
+    asset = current_platform_release_asset(result.get("assets", []))
+    result["platform_asset"] = asset
     return result
+
+
+@app.post("/api/updates/download")
+def start_update_download() -> Dict[str, object]:
+    result = fetch_latest_release()
+    if not result.get("update_available"):
+        raise HTTPException(status_code=400, detail="No newer release is available.")
+    asset = current_platform_release_asset(result.get("assets", []))
+    if not asset:
+        raise HTTPException(status_code=404, detail="No update package is available for this platform.")
+
+    download_id = uuid.uuid4().hex
+    state = {
+        "id": download_id,
+        "status": "queued",
+        "progress": 0,
+        "downloaded": 0,
+        "total": 0,
+        "version": result.get("latest_version") or result.get("latest_tag") or "",
+        "asset_name": asset.get("name", ""),
+        "release_url": result.get("html_url") or APP_RELEASES_URL,
+    }
+    with update_downloads_lock:
+        update_downloads[download_id] = state
+    thread = Thread(
+        target=download_update_package,
+        args=(download_id, asset, str(state["version"])),
+        daemon=True,
+    )
+    thread.start()
+    return state
+
+
+@app.get("/api/updates/download/{download_id}")
+def get_update_download(download_id: str) -> Dict[str, object]:
+    with update_downloads_lock:
+        state = update_downloads.get(download_id)
+    if not state:
+        raise HTTPException(status_code=404, detail="Update download not found.")
+    return state
 
 
 @app.get("/api/jobs")

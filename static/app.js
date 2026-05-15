@@ -13,6 +13,7 @@ const updateModal = document.getElementById("update-modal");
 const updateCloseButton = document.getElementById("update-close-button");
 const updateCheckButton = document.getElementById("update-check-button");
 const updateDownloadButton = document.getElementById("update-download-button");
+const updateOpenReleaseButton = document.getElementById("update-open-release-button");
 const currentVersionText = document.getElementById("current-version-text");
 const latestVersionText = document.getElementById("latest-version-text");
 const updateStateText = document.getElementById("update-state-text");
@@ -117,6 +118,7 @@ let waveformRequestId = 0;
 let waveformData = null;
 let appInfo = null;
 let latestUpdateInfo = null;
+let updateDownloadPollTimer = null;
 const jobs = new Map();
 const editorStateByJob = new Map();
 const UI_LOCALES = [
@@ -289,6 +291,11 @@ const I18N = {
     current_release_notes: "本版本新功能",
     latest_release_notes: "最新版本说明",
     check_updates: "检查更新",
+    download_update: "下载更新",
+    update_download_starting: "正在准备下载更新包...",
+    update_downloading: "正在下载更新包 {percent}%",
+    update_ready_install: "更新包已准备好：{path}。请退出应用后替换旧版本。",
+    update_download_failed: "更新下载失败：{message}",
     open_release: "打开下载页",
     pending_outputs_title: "待生成产物",
     pending_outputs_note: "任务完成后可一键下载 ZIP 和全部字幕文件。",
@@ -543,6 +550,11 @@ const I18N = {
     current_release_notes: "What's new in this version",
     latest_release_notes: "Latest release notes",
     check_updates: "Check for updates",
+    download_update: "Download update",
+    update_download_starting: "Preparing the update package...",
+    update_downloading: "Downloading update package {percent}%",
+    update_ready_install: "Update package is ready: {path}. Quit the app and replace the old version.",
+    update_download_failed: "Update download failed: {message}",
     open_release: "Open download page",
     pending_outputs_title: "Pending outputs",
     pending_outputs_note: "Download ZIP and all subtitle files after completion.",
@@ -796,6 +808,11 @@ const I18N = {
     current_release_notes: "このバージョンの新機能",
     latest_release_notes: "最新バージョンの説明",
     check_updates: "更新を確認",
+    download_update: "更新をダウンロード",
+    update_download_starting: "更新パッケージを準備しています...",
+    update_downloading: "更新パッケージをダウンロード中 {percent}%",
+    update_ready_install: "更新パッケージの準備ができました: {path}。アプリを終了して旧バージョンを置き換えてください。",
+    update_download_failed: "更新のダウンロードに失敗しました: {message}",
     open_release: "ダウンロードページを開く",
     pending_outputs_title: "生成待ちの出力",
     pending_outputs_note: "完了後に ZIP とすべての字幕ファイルをまとめて取得できます。",
@@ -1050,6 +1067,11 @@ const I18N = {
     current_release_notes: "Νέα αυτής της έκδοσης",
     latest_release_notes: "Σημειώσεις τελευταίας έκδοσης",
     check_updates: "Έλεγχος ενημέρωσης",
+    download_update: "Λήψη ενημέρωσης",
+    update_download_starting: "Προετοιμασία πακέτου ενημέρωσης...",
+    update_downloading: "Λήψη πακέτου ενημέρωσης {percent}%",
+    update_ready_install: "Το πακέτο ενημέρωσης είναι έτοιμο: {path}. Κλείσε την εφαρμογή και αντικατάστησε την παλιά έκδοση.",
+    update_download_failed: "Αποτυχία λήψης ενημέρωσης: {message}",
     open_release: "Άνοιγμα σελίδας λήψης",
     pending_outputs_title: "Αναμένονται αρχεία",
     pending_outputs_note: "Μετά την ολοκλήρωση θα μπορείς να κατεβάσεις ZIP και όλα τα αρχεία υποτίτλων.",
@@ -1332,7 +1354,8 @@ function renderUpdatePanel() {
   }
 
   updateBadge.classList.toggle("hidden", !latestUpdateInfo?.update_available);
-  updateDownloadButton.classList.toggle("hidden", !latestUpdateInfo?.html_url);
+  updateDownloadButton.classList.toggle("hidden", !latestUpdateInfo?.update_available || !latestUpdateInfo?.platform_asset);
+  updateOpenReleaseButton.classList.toggle("hidden", !latestUpdateInfo?.html_url);
 }
 
 function setUpdateModalOpen(open) {
@@ -1354,6 +1377,23 @@ async function openExternalUrl(url) {
     }
   }
   window.open(url, "_blank", "noopener,noreferrer");
+}
+
+async function revealPath(path) {
+  if (!path) {
+    return;
+  }
+  if (
+    window.pywebview &&
+    window.pywebview.api &&
+    typeof window.pywebview.api.reveal_path === "function"
+  ) {
+    const result = await window.pywebview.api.reveal_path(path);
+    if (result?.ok) {
+      return;
+    }
+  }
+  await openExternalUrl(latestUpdateInfo?.html_url || appInfo?.releases_url);
 }
 
 async function loadAppVersion() {
@@ -1391,6 +1431,59 @@ async function checkForUpdates({ silent = false } = {}) {
     }
   } finally {
     updateCheckButton.disabled = false;
+  }
+}
+
+async function pollUpdateDownload(downloadId) {
+  const response = await fetch(`/api/updates/download/${downloadId}`);
+  const payload = await response.json();
+  if (!response.ok) {
+    throw new Error(payload.detail || t("update_download_failed", { message: "-" }));
+  }
+  if (payload.status === "ready") {
+    clearInterval(updateDownloadPollTimer);
+    updateDownloadPollTimer = null;
+    updateDownloadButton.disabled = false;
+    updateStateText.textContent = t("update_ready_install", { path: payload.install_path || payload.package_path || "" });
+    await revealPath(payload.install_path || payload.package_path);
+    return;
+  }
+  if (payload.status === "failed") {
+    clearInterval(updateDownloadPollTimer);
+    updateDownloadPollTimer = null;
+    updateDownloadButton.disabled = false;
+    updateStateText.textContent = t("update_download_failed", { message: payload.error || "-" });
+    return;
+  }
+  const percent = payload.total ? Math.floor((payload.downloaded / payload.total) * 100) : 0;
+  updateStateText.textContent = t("update_downloading", { percent });
+}
+
+async function downloadUpdatePackage() {
+  setUpdateModalOpen(true);
+  updateDownloadButton.disabled = true;
+  updateStateText.textContent = t("update_download_starting");
+  try {
+    const response = await fetch("/api/updates/download", { method: "POST" });
+    const payload = await response.json();
+    if (!response.ok) {
+      throw new Error(payload.detail || "-");
+    }
+    if (updateDownloadPollTimer) {
+      clearInterval(updateDownloadPollTimer);
+    }
+    updateDownloadPollTimer = setInterval(() => {
+      pollUpdateDownload(payload.id).catch((error) => {
+        clearInterval(updateDownloadPollTimer);
+        updateDownloadPollTimer = null;
+        updateDownloadButton.disabled = false;
+        updateStateText.textContent = t("update_download_failed", { message: error.message || "-" });
+      });
+    }, 800);
+    await pollUpdateDownload(payload.id);
+  } catch (error) {
+    updateDownloadButton.disabled = false;
+    updateStateText.textContent = t("update_download_failed", { message: error.message || "-" });
   }
 }
 
@@ -3770,7 +3863,8 @@ updateTrigger.addEventListener("click", () => {
 });
 updateCloseButton.addEventListener("click", () => setUpdateModalOpen(false));
 updateCheckButton.addEventListener("click", () => checkForUpdates());
-updateDownloadButton.addEventListener("click", () => {
+updateDownloadButton.addEventListener("click", downloadUpdatePackage);
+updateOpenReleaseButton.addEventListener("click", () => {
   openExternalUrl(latestUpdateInfo?.html_url || appInfo?.releases_url);
 });
 updateModal.addEventListener("click", (event) => {

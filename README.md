@@ -169,13 +169,16 @@ Desktop builds can check GitHub Releases for updates from the version button in 
 - Current app version and latest published release version.
 - What's new in the current version.
 - Latest GitHub Release notes when a release is available.
-- A download button that opens the release page in the system browser.
+- A download button that fetches the platform release package into the local update folder.
+- On Windows, downloaded release ZIP files are extracted automatically; the app opens the extracted folder when ready.
+- A fallback button opens the GitHub Release page in the system browser.
 
-Installation is still manual:
+Replacement is still manual because a running desktop app cannot safely overwrite itself:
 
-1. Download the latest release package.
-2. Replace the old app with the new version.
-3. Existing local models, uploads, outputs, drafts, and history remain on the local machine.
+1. Download the update package from the update panel.
+2. Quit XM Subtitle Studio.
+3. Replace the old app with the downloaded or extracted new version.
+4. Existing local models, uploads, outputs, drafts, and history remain on the local machine.
 
 ## Download Behavior
 
