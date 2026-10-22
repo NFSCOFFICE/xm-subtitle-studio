@@ -12,11 +12,15 @@ permissions:
 jobs:
   macos:
     name: macOS DMG
-    runs-on: macos-latest
+    # Paused until an owner-managed runner for this OS is provisioned.
+    if: vars.SELF_HOSTED_MACOS_ENABLED == 'true'
+    runs-on: [self-hosted, macOS, X64, ci-xm-subtitle-studio]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Enforce self-hosted execution policy
+        run: /usr/bin/python3 "$GITHUB_WORKSPACE/.github/scripts/check-self-hosted-runners.py"
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -63,11 +67,15 @@ jobs:
 
   windows:
     name: Windows ZIP
-    runs-on: windows-2022
+    # Paused until an owner-managed runner for this OS is provisioned.
+    if: vars.SELF_HOSTED_WINDOWS_ENABLED == 'true'
+    runs-on: [self-hosted, Windows, X64, ci-xm-subtitle-studio]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Enforce self-hosted execution policy
+        run: /usr/bin/python3 "$GITHUB_WORKSPACE/.github/scripts/check-self-hosted-runners.py"
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -102,7 +110,7 @@ jobs:
     needs:
       - macos
       - windows
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64, ci-xm-subtitle-studio]
     if: startsWith(github.ref, 'refs/tags/v')
     steps:
       - name: Download artifacts
