@@ -1,0 +1,31 @@
+name: Self-hosted runner smoke
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  ci:
+    runs-on: [self-hosted, Linux, X64, ci-xm-subtitle-studio]
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Check execution policy
+        run: /usr/bin/python3 "$GITHUB_WORKSPACE/.github/scripts/check-self-hosted-runners.py"
+      - name: Prove execution identity and rootless Docker
+        env:
+          ACTUAL_ENVIRONMENT: ${{ runner.environment }}
+          ACTUAL_RUNNER: ${{ runner.name }}
+          ACTUAL_OS: ${{ runner.os }}
+        run: |
+          test "$ACTUAL_ENVIRONMENT" = self-hosted
+          test "$ACTUAL_OS" = Linux
+          test "$(id -u)" -ne 0
+          printf 'runner=%s environment=%s os=%s\n' "$ACTUAL_RUNNER" "$ACTUAL_ENVIRONMENT" "$ACTUAL_OS"
+          docker info --format '{{json .SecurityOptions}}' | grep rootless
+          docker run --rm alpine:3.22 echo isolated-runner-smoke-ok
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - run: python -c 'import ssl, ctypes; print("Python tool cache ready")'

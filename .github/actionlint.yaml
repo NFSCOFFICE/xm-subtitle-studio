@@ -1,0 +1,4 @@
+self-hosted-runner:
+  labels:
+    - ci-xm-subtitle-studio
+    - deploy-xm-subtitle-studio

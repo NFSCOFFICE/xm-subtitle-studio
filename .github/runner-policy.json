@@ -1,0 +1,10 @@
+{
+  "ci_label": "ci-xm-subtitle-studio",
+  "deploy_label": "deploy-xm-subtitle-studio",
+  "native_builds_paused": true,
+  "native_jobs": [
+    "build-desktop.yml:macos",
+    "build-desktop.yml:windows"
+  ],
+  "repository": "NFSCOFFICE/xm-subtitle-studio"
+}
