@@ -1,0 +1,32 @@
+name: Store bounded CI evidence
+description: Private owner-hosted diagnostics with size, retention and capacity limits.
+inputs:
+  name:
+    description: Evidence identity
+    required: true
+  path:
+    description: Evidence files relative to checkout or runner temporary directory
+    required: true
+  retention-days:
+    description: Retention from one to seven days
+    default: '3'
+  if-no-files-found:
+    description: error or warn
+    default: error
+runs:
+  using: composite
+  steps:
+    - name: Require owner-managed runner
+      shell: bash
+      env:
+        RUNNER_ENVIRONMENT: ${{ runner.environment }}
+      run: test "$RUNNER_ENVIRONMENT" = self-hosted
+    - name: Persist bounded private evidence
+      shell: bash
+      env:
+        EVIDENCE_NAME: ${{ inputs.name }}
+        EVIDENCE_PATHS: ${{ inputs.path }}
+        EVIDENCE_RETENTION_DAYS: ${{ inputs.retention-days }}
+        EVIDENCE_MISSING: ${{ inputs.if-no-files-found }}
+        CI_EVIDENCE_ROOT: /var/lib/gha-evidence/xm-subtitle-studio
+      run: python3 "$GITHUB_ACTION_PATH/../../scripts/local_evidence.py" publish

@@ -12,7 +12,9 @@ jobs:
         with:
           persist-credentials: false
       - name: Check execution policy
-        run: /usr/bin/python3 "$GITHUB_WORKSPACE/.github/scripts/check-self-hosted-runners.py"
+        run: |
+          /usr/bin/python3 "$GITHUB_WORKSPACE/.github/scripts/check-self-hosted-runners.py"
+          /usr/bin/python3 "$GITHUB_WORKSPACE/.github/scripts/check-evidence-policy.py"
       - name: Prove execution identity and rootless Docker
         env:
           ACTUAL_ENVIRONMENT: ${{ runner.environment }}
