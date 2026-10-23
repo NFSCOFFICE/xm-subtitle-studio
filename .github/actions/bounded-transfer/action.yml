@@ -1,0 +1,31 @@
+name: Bounded installer transfer
+description: Short-lived cross-runner installer delivery, never diagnostic storage.
+inputs:
+  name:
+    description: Artifact identity preserved for downstream consumers
+    required: true
+  path:
+    description: Installer files relative to the checkout
+    required: true
+  if-no-files-found:
+    description: Missing installers fail the build
+    default: error
+runs:
+  using: composite
+  steps:
+    - name: Require owner-managed runner
+      shell: bash
+      env:
+        RUNNER_ENVIRONMENT: ${{ runner.environment }}
+      run: test "$RUNNER_ENVIRONMENT" = self-hosted
+    - name: Check installer byte limit
+      shell: bash
+      env:
+        TRANSFER_PATHS: ${{ inputs.path }}
+      run: python3 "$GITHUB_ACTION_PATH/../../scripts/check-transfer.py"
+    - uses: actions/upload-artifact@v4
+      with:
+        name: ${{ inputs.name }}
+        path: ${{ inputs.path }}
+        if-no-files-found: error
+        retention-days: 1
