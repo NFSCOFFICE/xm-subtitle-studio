@@ -10,7 +10,7 @@ for path in sorted((root / ".github").rglob("*")):
     if path.suffix not in {".yml", ".yaml"}:
         continue
     text = path.read_text()
-    if re.search(r"uses:\s*actions/(?:upload-artifact|upload-pages-artifact)@", text):
+    if re.search(r"actions/(?:upload-artifact|upload-pages-artifact)@", text, re.IGNORECASE):
         if (
             path.relative_to(root).as_posix()
             != ".github/actions/bounded-transfer/action.yml"
